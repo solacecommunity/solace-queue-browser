@@ -1,0 +1,518 @@
+/*
+ * SEMP (Solace Element Management Protocol)
+ * SEMP (starting in `v2`, see note 1) is a RESTful API for configuring, monitoring, and administering a Solace PubSub+ broker.  SEMP uses URIs to address manageable **resources** of the Solace PubSub+ broker. Resources are individual **objects**, **collections** of objects, or (exclusively in the action API) **actions**. This document applies to the following API:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Monitoring|/SEMP/v2/monitor|Querying operational parameters|See note 2    The following APIs are also available:   API|Base Path|Purpose|Comments :---|:---|:---|:--- Action|/SEMP/v2/action|Performing actions|See note 2 Configuration|/SEMP/v2/config|Reading and writing config state|See note 2    Resources are always nouns, with individual objects being singular and collections being plural.  Objects within a collection are identified by an `obj-id`, which follows the collection name with the form `collection-name/obj-id`. An `obj-id` consists of one or more identifying attributes, separated by commas. Commas that appear in the identifying attribute itself must be percent encoded.   Actions within an object are identified by an `action-id`, which follows the object name with the form `obj-id/action-id`.  Some examples:  ``` /SEMP/v2/config/msgVpns                        ; MsgVpn collection /SEMP/v2/config/msgVpns/a                      ; MsgVpn object named \"a\" /SEMP/v2/config/msgVpns/a/bridges              ; Bridge collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/bridges/b,auto       ; Bridge object named \"b\" with virtual router \"auto\" in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues               ; Queue collection in MsgVpn \"a\" /SEMP/v2/config/msgVpns/a/queues/c             ; Queue object named \"c\" in MsgVpn \"a\" /SEMP/v2/action/msgVpns/a/queues/c/startReplay ; Action that starts a replay on Queue \"c\" in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients             ; Client collection in MsgVpn \"a\" /SEMP/v2/monitor/msgVpns/a/clients/d           ; Client object named \"d\" in MsgVpn \"a\" ```  ## Collection Resources  Collections are unordered lists of objects (unless described as otherwise), and are described by JSON arrays. Each item in the array represents an object in the same manner as the individual object would normally be represented. In the configuration API, the creation of a new object is done through its collection resource.  ## Object and Action Resources  Objects are composed of attributes, actions, collections, and other objects. They are described by JSON objects as name/value pairs. The collections and actions of an object are not contained directly in the object's JSON content; rather the content includes an attribute containing a URI which points to the collections and actions. These contained resources must be managed through this URI. At a minimum, every object has one or more identifying attributes, and its own `uri` attribute which contains the URI pointing to itself.  Actions are also composed of attributes, and are described by JSON objects as name/value pairs. Unlike objects, however, they are not members of a collection and cannot be retrieved, only performed. Actions only exist in the action API.  Attributes in an object or action may have any combination of the following properties:   Property|Meaning|Comments :---|:---|:--- Identifying|Attribute is involved in unique identification of the object, and appears in its URI| Const|Attribute value can only be chosen during object creation| Required|Attribute must be provided in the request| Read-Only|Attribute value cannot be changed|See note 3 Write-Only|Attribute can only be written, not read, unless the attribute is also opaque|See the documentation for the opaque property Requires-Disable|Attribute cannot be changed while the object (or the relevant part of the object) is administratively enabled| Auto-Disable|Modifying this attribute while the object (or the relevant part of the object) is administratively enabled may be service impacting as one or more attributes will be temporarily disabled to apply the change| Deprecated|Attribute is deprecated, and will disappear in the next SEMP version| Opaque|Attribute can be set or retrieved in opaque form when the `opaquePassword` query parameter is present|See the `opaquePassword` query parameter documentation    In some requests, certain attributes may only be provided in certain combinations with other attributes:   Relationship|Meaning|Comments :---|:---|:--- Requires|Attribute may only be provided in a request if a particular attribute or combination of attributes is also provided in the request|The \"requires\" property will not be enforced for an attribute when all of the following conditions are met: (a) the attribute is not write-only; (b) the value provided for the attribute is the same as its current (or, on object creation, its default) value; and (c) the attribute requires a write-only attribute. In addition, the \"requires\" property may not be enforced even if only conditions (a) and (b) are met. Conflicts|Attribute may only be provided in a request if a particular attribute or combination of attributes is not also provided in the request|    In the monitoring API, any non-identifying attribute may not be returned in a GET.  ## HTTP Methods  The following HTTP methods manipulate resources in accordance with these general principles. Note that some methods are only used in certain APIs:   Method|Resource|Meaning|Request Body|Response Body|Notes :---|:---|:---|:---|:---|:--- POST|Collection|Create object|Initial attribute values|Object attributes and metadata|Absent attributes are set to default. If object already exists, a 400 error is returned PUT|Object|Update object|New attribute values|Object attributes and metadata|If does not exist, the object is first created. Absent attributes are set to default, with certain exceptions (see note 4) PUT|Action|Performs action|Action arguments|Action metadata| PATCH|Object|Update object|New attribute values|Object attributes and metadata|Absent attributes are left unchanged. If the object does not exist, a 404 error is returned DELETE|Object|Delete object|Empty|Object metadata|If the object does not exist, a 404 is returned GET|Object|Get object|Empty|Object attributes and metadata|If the object does not exist, a 404 is returned GET|Collection|Get collection|Empty|Object attributes and collection metadata|If the collection is empty, then an empty collection is returned with a 200 code    ## Common Query Parameters  The following are some common query parameters that are supported by many method/URI combinations. Individual URIs may document additional parameters. Note that multiple query parameters can be used together in a single URI, separated by the ampersand character. For example:  ``` ; Request for the MsgVpns collection using two hypothetical query parameters ; \"q1\" and \"q2\" with values \"val1\" and \"val2\" respectively /SEMP/v2/monitor/msgVpns?q1=val1&q2=val2 ```  ### select  Include in the response only selected attributes of the object, or exclude from the response selected attributes of the object. Use this query parameter to limit the size of the returned data for each returned object, return only those fields that are desired, or exclude fields that are not desired.  The value of `select` is a comma-separated list of attribute names. If the list contains attribute names that are not prefaced by `-`, only those attributes are included in the response. If the list contains attribute names that are prefaced by `-`, those attributes are excluded from the response. If the list contains both types, then the difference of the first set of attributes and the second set of attributes is returned. If the list is empty (i.e. `select=`), it is treated the same as if no `select` was provided: all attribute are returned.  All attributes that are prefaced by `-` must follow all attributes that are not prefaced by `-`. In addition, each attribute name in the list must match at least one attribute in the object.  Names may include the `*` wildcard (zero or more characters). Nested attribute names are supported using periods (e.g. `parentName.childName`).  Some examples:  ``` ; List of all MsgVpn names /SEMP/v2/monitor/msgVpns?select=msgVpnName ; List of all MsgVpn and their attributes except for their names /SEMP/v2/monitor/msgVpns?select=-msgVpnName ; Authentication attributes of MsgVpn \"finance\" /SEMP/v2/monitor/msgVpns/finance?select=authentication%2A ; All attributes of MsgVpn \"finance\" except for authentication attributes /SEMP/v2/monitor/msgVpns/finance?select=-authentication%2A ; Access related attributes of Queue \"orderQ\" of MsgVpn \"finance\" /SEMP/v2/monitor/msgVpns/finance/queues/orderQ?select=owner,permission ```  ### where  Include in the response only objects where certain conditions are true. Use this query parameter to limit which objects are returned to those whose attribute values meet the given conditions.  The value of `where` is a comma-separated list of expressions. All expressions must be true for the object to be included in the response. Each expression takes the form:  ``` expression  = attribute-name OP value OP          = '==' | '!=' | '<' | '>' | '<=' | '>=' ```  Write-only attributes cannot be used in a `where` expression.  `value` may be a number, string, `true`, or `false`, as appropriate for the type of `attribute-name`.  A `*` in a string `value` is interpreted as a wildcard (zero or more characters), but can be escaped using `\\`. The `\\` character can itself be escaped using `\\`. The `*` wildcard can only be used with the `==` and `!=` operators. If `*` is used as a literal with other operators, it must be escaped.  The `<`, `>`, `<=`, and `>=` operators perform a simple byte-for-byte comparison when used with a string `value`.  Some examples:  ``` ; Only enabled MsgVpns /SEMP/v2/monitor/msgVpns?where=enabled%3D%3Dtrue ; Only MsgVpns using basic non-LDAP authentication /SEMP/v2/monitor/msgVpns?where=authenticationBasicEnabled%3D%3Dtrue,authenticationBasicType%21%3Dldap ; Only MsgVpns that allow more than 100 client connections /SEMP/v2/monitor/msgVpns?where=maxConnectionCount%3E100 ; Only MsgVpns with msgVpnName starting with \"B\": /SEMP/v2/monitor/msgVpns?where=msgVpnName%3D%3DB%2A ```  ### count  Limit the count of objects in the response. This can be useful to limit the size of the response for large collections. The minimum value for `count` is `1` and the default is `10`. There is also a per-collection maximum value to limit request handling time.  `count` does not guarantee that a minimum number of objects will be returned. A page may contain fewer than `count` objects or even be empty. Additional objects may nonetheless be available for retrieval on subsequent pages. See the `cursor` query parameter documentation for more information on paging.  For example: ``` ; Up to 25 MsgVpns /SEMP/v2/monitor/msgVpns?count=25 ```  ### cursor  The cursor, or position, for the next page of objects. Cursors are opaque data that should not be created or interpreted by SEMP clients, and should only be used as described below.  When a request is made for a collection and there may be additional objects available for retrieval that are not included in the initial response, the response will include a `cursorQuery` field containing a cursor. The value of this field can be specified in the `cursor` query parameter of a subsequent request to retrieve the next page of objects.  Applications must continue to use the `cursorQuery` if one is provided in order to retrieve the full set of objects associated with the request, even if a page contains fewer than the requested number of objects (see the `count` query parameter documentation) or is empty.  ### opaquePassword  Attributes with the opaque property are also write-only and so cannot normally be retrieved in a GET. However, when a password is provided in the `opaquePassword` query parameter, attributes with the opaque property are retrieved in a GET in opaque form, encrypted with this password. The query parameter can also be used on a POST, PATCH, or PUT to set opaque attributes using opaque attribute values retrieved in a GET, so long as:  1. the same password that was used to retrieve the opaque attribute values is provided; and  2. the broker to which the request is being sent has the same major and minor SEMP version as the broker that produced the opaque attribute values.  The password provided in the query parameter must be a minimum of 8 characters and a maximum of 128 characters.  The query parameter can only be used in the configuration API, and only over HTTPS.  ## Authentication  When a client makes its first SEMPv2 request, it must supply a username and password using HTTP Basic authentication, or an OAuth token or tokens using HTTP Bearer authentication.  When HTTP Basic authentication is used, the broker returns a cookie containing a session key. The client can omit the username and password from subsequent requests, because the broker can use the session cookie for authentication instead. When the session expires or is deleted, the client must provide the username and password again, and the broker creates a new session.  There are a limited number of session slots available on the broker. The broker returns 529 No SEMP Session Available if it is not able to allocate a session.  If certain attributes—such as a user's password—are changed, the broker automatically deletes the affected sessions. These attributes are documented below. However, changes in external user configuration data stored on a RADIUS or LDAP server do not trigger the broker to delete the associated session(s), therefore you must do this manually, if required.  A client can retrieve its current session information using the /about/user endpoint and delete its own session using the /about/user/logout endpoint. A client with appropriate permissions can also manage all sessions using the /sessions endpoint.  Sessions are not created when authenticating with an OAuth token or tokens using HTTP Bearer authentication. If a session cookie is provided, it is ignored.  ## Help  Visit [our website](https://solace.com) to learn more about Solace.  You can also download the SEMP API specifications by clicking [here](https://solace.com/downloads/).  If you need additional support, please contact us at [support@solace.com](mailto:support@solace.com).  ## Notes  Note|Description :---:|:--- 1|This specification defines SEMP starting in \"v2\", and not the original SEMP \"v1\" interface. Request and response formats between \"v1\" and \"v2\" are entirely incompatible, although both protocols share a common port configuration on the Solace PubSub+ broker. They are differentiated by the initial portion of the URI path, one of either \"/SEMP/\" or \"/SEMP/v2/\" 2|This API is partially implemented. Only a subset of all objects are available. 3|Read-only attributes may appear in POST and PUT/PATCH requests but are ignored, except when the read-only attribute is identifying. 4|On a PUT, if the SEMP user is not authorized to modify the attribute, its value is left unchanged rather than set to default. In addition, the values of write-only attributes are not set to their defaults on a PUT, except in the following two cases: there is a mutual requires relationship with another non-write-only attribute, both attributes are absent from the request, and the non-write-only attribute is not currently set to its default value; or the attribute is also opaque and the `opaquePassword` query parameter is provided in the request.  
+ *
+ * OpenAPI spec version: 2.36
+ * Contact: support@solace.com
+ *
+ * NOTE: This class is auto generated by the swagger code generator program.
+ * https://github.com/swagger-api/swagger-codegen.git
+ *
+ * Swagger Codegen version: 3.0.34
+ *
+ * Do not edit the class manually.
+ *
+ */
+import {ApiClient} from '../ApiClient';
+
+/**
+ * The MsgVpnAuthenticationOauthProviderModel model module.
+ * @module model/MsgVpnAuthenticationOauthProviderModel
+ * @version 2.36
+ */
+export class MsgVpnAuthenticationOauthProviderModel {
+  /**
+   * Constructs a new <code>MsgVpnAuthenticationOauthProviderModel</code>.
+   * @alias module:model/MsgVpnAuthenticationOauthProviderModel
+   * @class
+   */
+  constructor() {
+  }
+
+  /**
+   * Constructs a <code>MsgVpnAuthenticationOauthProviderModel</code> from a plain JavaScript object, optionally creating a new instance.
+   * Copies all relevant properties from <code>data</code> to <code>obj</code> if supplied or a new instance if not.
+   * @param {Object} data The plain JavaScript object bearing properties of interest.
+   * @param {module:model/MsgVpnAuthenticationOauthProviderModel} obj Optional instance to populate.
+   * @return {module:model/MsgVpnAuthenticationOauthProviderModel} The populated <code>MsgVpnAuthenticationOauthProviderModel</code> instance.
+   */
+  static constructFromObject(data, obj) {
+    if (data) {
+      obj = obj || new MsgVpnAuthenticationOauthProviderModel();
+      if (data.hasOwnProperty('audienceClaimName'))
+        obj.audienceClaimName = ApiClient.convertToType(data['audienceClaimName'], 'String');
+      if (data.hasOwnProperty('audienceClaimSource'))
+        obj.audienceClaimSource = ApiClient.convertToType(data['audienceClaimSource'], 'String');
+      if (data.hasOwnProperty('audienceClaimValue'))
+        obj.audienceClaimValue = ApiClient.convertToType(data['audienceClaimValue'], 'String');
+      if (data.hasOwnProperty('audienceValidationEnabled'))
+        obj.audienceValidationEnabled = ApiClient.convertToType(data['audienceValidationEnabled'], 'Boolean');
+      if (data.hasOwnProperty('authenticationSuccessCount'))
+        obj.authenticationSuccessCount = ApiClient.convertToType(data['authenticationSuccessCount'], 'Number');
+      if (data.hasOwnProperty('authorizationGroupClaimName'))
+        obj.authorizationGroupClaimName = ApiClient.convertToType(data['authorizationGroupClaimName'], 'String');
+      if (data.hasOwnProperty('authorizationGroupClaimSource'))
+        obj.authorizationGroupClaimSource = ApiClient.convertToType(data['authorizationGroupClaimSource'], 'String');
+      if (data.hasOwnProperty('authorizationGroupEnabled'))
+        obj.authorizationGroupEnabled = ApiClient.convertToType(data['authorizationGroupEnabled'], 'Boolean');
+      if (data.hasOwnProperty('disconnectOnTokenExpirationEnabled'))
+        obj.disconnectOnTokenExpirationEnabled = ApiClient.convertToType(data['disconnectOnTokenExpirationEnabled'], 'Boolean');
+      if (data.hasOwnProperty('enabled'))
+        obj.enabled = ApiClient.convertToType(data['enabled'], 'Boolean');
+      if (data.hasOwnProperty('jwksLastRefreshFailureReason'))
+        obj.jwksLastRefreshFailureReason = ApiClient.convertToType(data['jwksLastRefreshFailureReason'], 'String');
+      if (data.hasOwnProperty('jwksLastRefreshFailureTime'))
+        obj.jwksLastRefreshFailureTime = ApiClient.convertToType(data['jwksLastRefreshFailureTime'], 'Number');
+      if (data.hasOwnProperty('jwksLastRefreshTime'))
+        obj.jwksLastRefreshTime = ApiClient.convertToType(data['jwksLastRefreshTime'], 'Number');
+      if (data.hasOwnProperty('jwksNextScheduledRefreshTime'))
+        obj.jwksNextScheduledRefreshTime = ApiClient.convertToType(data['jwksNextScheduledRefreshTime'], 'Number');
+      if (data.hasOwnProperty('jwksRefreshFailureCount'))
+        obj.jwksRefreshFailureCount = ApiClient.convertToType(data['jwksRefreshFailureCount'], 'Number');
+      if (data.hasOwnProperty('jwksRefreshInterval'))
+        obj.jwksRefreshInterval = ApiClient.convertToType(data['jwksRefreshInterval'], 'Number');
+      if (data.hasOwnProperty('jwksUri'))
+        obj.jwksUri = ApiClient.convertToType(data['jwksUri'], 'String');
+      if (data.hasOwnProperty('loginFailureIncorrectAudienceValueCount'))
+        obj.loginFailureIncorrectAudienceValueCount = ApiClient.convertToType(data['loginFailureIncorrectAudienceValueCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureInvalidAudienceValueCount'))
+        obj.loginFailureInvalidAudienceValueCount = ApiClient.convertToType(data['loginFailureInvalidAudienceValueCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureInvalidAuthorizationGroupValueCount'))
+        obj.loginFailureInvalidAuthorizationGroupValueCount = ApiClient.convertToType(data['loginFailureInvalidAuthorizationGroupValueCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureInvalidJwtSignatureCount'))
+        obj.loginFailureInvalidJwtSignatureCount = ApiClient.convertToType(data['loginFailureInvalidJwtSignatureCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureInvalidUsernameValueCount'))
+        obj.loginFailureInvalidUsernameValueCount = ApiClient.convertToType(data['loginFailureInvalidUsernameValueCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureMismatchedUsernameCount'))
+        obj.loginFailureMismatchedUsernameCount = ApiClient.convertToType(data['loginFailureMismatchedUsernameCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureMissingAudienceCount'))
+        obj.loginFailureMissingAudienceCount = ApiClient.convertToType(data['loginFailureMissingAudienceCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureMissingJwkCount'))
+        obj.loginFailureMissingJwkCount = ApiClient.convertToType(data['loginFailureMissingJwkCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureMissingOrInvalidTokenCount'))
+        obj.loginFailureMissingOrInvalidTokenCount = ApiClient.convertToType(data['loginFailureMissingOrInvalidTokenCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureMissingUsernameCount'))
+        obj.loginFailureMissingUsernameCount = ApiClient.convertToType(data['loginFailureMissingUsernameCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenExpiredCount'))
+        obj.loginFailureTokenExpiredCount = ApiClient.convertToType(data['loginFailureTokenExpiredCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenIntrospectionErroredCount'))
+        obj.loginFailureTokenIntrospectionErroredCount = ApiClient.convertToType(data['loginFailureTokenIntrospectionErroredCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenIntrospectionFailureCount'))
+        obj.loginFailureTokenIntrospectionFailureCount = ApiClient.convertToType(data['loginFailureTokenIntrospectionFailureCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenIntrospectionHttpsErrorCount'))
+        obj.loginFailureTokenIntrospectionHttpsErrorCount = ApiClient.convertToType(data['loginFailureTokenIntrospectionHttpsErrorCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenIntrospectionInvalidCount'))
+        obj.loginFailureTokenIntrospectionInvalidCount = ApiClient.convertToType(data['loginFailureTokenIntrospectionInvalidCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenIntrospectionTimeoutCount'))
+        obj.loginFailureTokenIntrospectionTimeoutCount = ApiClient.convertToType(data['loginFailureTokenIntrospectionTimeoutCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureTokenNotValidYetCount'))
+        obj.loginFailureTokenNotValidYetCount = ApiClient.convertToType(data['loginFailureTokenNotValidYetCount'], 'Number');
+      if (data.hasOwnProperty('loginFailureUnsupportedAlgCount'))
+        obj.loginFailureUnsupportedAlgCount = ApiClient.convertToType(data['loginFailureUnsupportedAlgCount'], 'Number');
+      if (data.hasOwnProperty('missingAuthorizationGroupCount'))
+        obj.missingAuthorizationGroupCount = ApiClient.convertToType(data['missingAuthorizationGroupCount'], 'Number');
+      if (data.hasOwnProperty('msgVpnName'))
+        obj.msgVpnName = ApiClient.convertToType(data['msgVpnName'], 'String');
+      if (data.hasOwnProperty('oauthProviderName'))
+        obj.oauthProviderName = ApiClient.convertToType(data['oauthProviderName'], 'String');
+      if (data.hasOwnProperty('tokenIgnoreTimeLimitsEnabled'))
+        obj.tokenIgnoreTimeLimitsEnabled = ApiClient.convertToType(data['tokenIgnoreTimeLimitsEnabled'], 'Boolean');
+      if (data.hasOwnProperty('tokenIntrospectionAverageTime'))
+        obj.tokenIntrospectionAverageTime = ApiClient.convertToType(data['tokenIntrospectionAverageTime'], 'Number');
+      if (data.hasOwnProperty('tokenIntrospectionLastFailureReason'))
+        obj.tokenIntrospectionLastFailureReason = ApiClient.convertToType(data['tokenIntrospectionLastFailureReason'], 'String');
+      if (data.hasOwnProperty('tokenIntrospectionLastFailureTime'))
+        obj.tokenIntrospectionLastFailureTime = ApiClient.convertToType(data['tokenIntrospectionLastFailureTime'], 'Number');
+      if (data.hasOwnProperty('tokenIntrospectionParameterName'))
+        obj.tokenIntrospectionParameterName = ApiClient.convertToType(data['tokenIntrospectionParameterName'], 'String');
+      if (data.hasOwnProperty('tokenIntrospectionSuccessCount'))
+        obj.tokenIntrospectionSuccessCount = ApiClient.convertToType(data['tokenIntrospectionSuccessCount'], 'Number');
+      if (data.hasOwnProperty('tokenIntrospectionTimeout'))
+        obj.tokenIntrospectionTimeout = ApiClient.convertToType(data['tokenIntrospectionTimeout'], 'Number');
+      if (data.hasOwnProperty('tokenIntrospectionUri'))
+        obj.tokenIntrospectionUri = ApiClient.convertToType(data['tokenIntrospectionUri'], 'String');
+      if (data.hasOwnProperty('tokenIntrospectionUsername'))
+        obj.tokenIntrospectionUsername = ApiClient.convertToType(data['tokenIntrospectionUsername'], 'String');
+      if (data.hasOwnProperty('usernameClaimName'))
+        obj.usernameClaimName = ApiClient.convertToType(data['usernameClaimName'], 'String');
+      if (data.hasOwnProperty('usernameClaimSource'))
+        obj.usernameClaimSource = ApiClient.convertToType(data['usernameClaimSource'], 'String');
+      if (data.hasOwnProperty('usernameValidateEnabled'))
+        obj.usernameValidateEnabled = ApiClient.convertToType(data['usernameValidateEnabled'], 'Boolean');
+    }
+    return obj;
+  }
+}
+
+/**
+ * The audience claim name, indicating which part of the object to use for determining the audience. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} audienceClaimName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.audienceClaimName = undefined;
+
+/**
+ * Allowed values for the <code>audienceClaimSource</code> property.
+ * @enum {String}
+ * @readonly
+ */
+MsgVpnAuthenticationOauthProviderModel.AudienceClaimSourceEnum = {
+  /**
+   * value: "access-token"
+   * @const
+   */
+  accessToken: "access-token",
+
+  /**
+   * value: "id-token"
+   * @const
+   */
+  idToken: "id-token",
+
+  /**
+   * value: "introspection"
+   * @const
+   */
+  introspection: "introspection"
+};
+/**
+ * The audience claim source, indicating where to search for the audience value. The allowed values and their meaning are:  <pre> \"access-token\" - The OAuth v2 access_token. \"id-token\" - The OpenID Connect id_token. \"introspection\" - The result of introspecting the OAuth v2 access_token. </pre>  Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {module:model/MsgVpnAuthenticationOauthProviderModel.AudienceClaimSourceEnum} audienceClaimSource
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.audienceClaimSource = undefined;
+
+/**
+ * The required audience value for a token to be considered valid. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} audienceClaimValue
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.audienceClaimValue = undefined;
+
+/**
+ * Indicates whether audience validation is enabled. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} audienceValidationEnabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.audienceValidationEnabled = undefined;
+
+/**
+ * The number of OAuth Provider client authentications that succeeded. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} authenticationSuccessCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.authenticationSuccessCount = undefined;
+
+/**
+ * The authorization group claim name, indicating which part of the object to use for determining the authorization group. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} authorizationGroupClaimName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.authorizationGroupClaimName = undefined;
+
+/**
+ * Allowed values for the <code>authorizationGroupClaimSource</code> property.
+ * @enum {String}
+ * @readonly
+ */
+MsgVpnAuthenticationOauthProviderModel.AuthorizationGroupClaimSourceEnum = {
+  /**
+   * value: "access-token"
+   * @const
+   */
+  accessToken: "access-token",
+
+  /**
+   * value: "id-token"
+   * @const
+   */
+  idToken: "id-token",
+
+  /**
+   * value: "introspection"
+   * @const
+   */
+  introspection: "introspection"
+};
+/**
+ * The authorization group claim source, indicating where to search for the authorization group name. The allowed values and their meaning are:  <pre> \"access-token\" - The OAuth v2 access_token. \"id-token\" - The OpenID Connect id_token. \"introspection\" - The result of introspecting the OAuth v2 access_token. </pre>  Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {module:model/MsgVpnAuthenticationOauthProviderModel.AuthorizationGroupClaimSourceEnum} authorizationGroupClaimSource
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.authorizationGroupClaimSource = undefined;
+
+/**
+ * Indicates whether OAuth based authorization is enabled and the configured authorization type for OAuth clients is overridden. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} authorizationGroupEnabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.authorizationGroupEnabled = undefined;
+
+/**
+ * Indicates whether clients are disconnected when their tokens expire. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} disconnectOnTokenExpirationEnabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.disconnectOnTokenExpirationEnabled = undefined;
+
+/**
+ * Indicates whether OAuth Provider client authentication is enabled. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} enabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.enabled = undefined;
+
+/**
+ * The reason for the last JWKS public key refresh failure. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} jwksLastRefreshFailureReason
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksLastRefreshFailureReason = undefined;
+
+/**
+ * The timestamp of the last JWKS public key refresh failure. This value represents the number of seconds since 1970-01-01 00:00:00 UTC (Unix time). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} jwksLastRefreshFailureTime
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksLastRefreshFailureTime = undefined;
+
+/**
+ * The timestamp of the last JWKS public key refresh success. This value represents the number of seconds since 1970-01-01 00:00:00 UTC (Unix time). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} jwksLastRefreshTime
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksLastRefreshTime = undefined;
+
+/**
+ * The timestamp of the next scheduled JWKS public key refresh. This value represents the number of seconds since 1970-01-01 00:00:00 UTC (Unix time). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} jwksNextScheduledRefreshTime
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksNextScheduledRefreshTime = undefined;
+
+/**
+ * The number of JWKS public key refresh failures. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} jwksRefreshFailureCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksRefreshFailureCount = undefined;
+
+/**
+ * The number of seconds between forced JWKS public key refreshing. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} jwksRefreshInterval
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksRefreshInterval = undefined;
+
+/**
+ * The URI where the OAuth provider publishes its JWKS public keys. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} jwksUri
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.jwksUri = undefined;
+
+/**
+ * The number of login failures due to an incorrect audience value. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureIncorrectAudienceValueCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureIncorrectAudienceValueCount = undefined;
+
+/**
+ * The number of login failures due to an invalid audience value. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureInvalidAudienceValueCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureInvalidAudienceValueCount = undefined;
+
+/**
+ * The number of login failures due to an invalid authorization group value (zero-length or non-string). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureInvalidAuthorizationGroupValueCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureInvalidAuthorizationGroupValueCount = undefined;
+
+/**
+ * The number of login failures due to an invalid JWT signature. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureInvalidJwtSignatureCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureInvalidJwtSignatureCount = undefined;
+
+/**
+ * The number of login failures due to an invalid username value. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureInvalidUsernameValueCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureInvalidUsernameValueCount = undefined;
+
+/**
+ * The number of login failures due to a mismatched username. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureMismatchedUsernameCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureMismatchedUsernameCount = undefined;
+
+/**
+ * The number of login failures due to a missing audience claim. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureMissingAudienceCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureMissingAudienceCount = undefined;
+
+/**
+ * The number of login failures due to a missing JSON Web Key (JWK). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureMissingJwkCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureMissingJwkCount = undefined;
+
+/**
+ * The number of login failures due to a missing or invalid token. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureMissingOrInvalidTokenCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureMissingOrInvalidTokenCount = undefined;
+
+/**
+ * The number of login failures due to a missing username. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureMissingUsernameCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureMissingUsernameCount = undefined;
+
+/**
+ * The number of login failures due to a token being expired. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenExpiredCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenExpiredCount = undefined;
+
+/**
+ * The number of login failures due to a token introspection error response. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenIntrospectionErroredCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenIntrospectionErroredCount = undefined;
+
+/**
+ * The number of login failures due to a failure to complete the token introspection. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenIntrospectionFailureCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenIntrospectionFailureCount = undefined;
+
+/**
+ * The number of login failures due to a token introspection HTTPS error. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenIntrospectionHttpsErrorCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenIntrospectionHttpsErrorCount = undefined;
+
+/**
+ * The number of login failures due to a token introspection response being invalid. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenIntrospectionInvalidCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenIntrospectionInvalidCount = undefined;
+
+/**
+ * The number of login failures due to a token introspection timeout. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenIntrospectionTimeoutCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenIntrospectionTimeoutCount = undefined;
+
+/**
+ * The number of login failures due to a token not being valid yet. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureTokenNotValidYetCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureTokenNotValidYetCount = undefined;
+
+/**
+ * The number of login failures due to an unsupported algorithm. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} loginFailureUnsupportedAlgCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.loginFailureUnsupportedAlgCount = undefined;
+
+/**
+ * The number of clients that did not provide an authorization group claim value when expected. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} missingAuthorizationGroupCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.missingAuthorizationGroupCount = undefined;
+
+/**
+ * The name of the Message VPN. Deprecated since 2.25. Replaced by authenticationOauthProfiles.
+ * @member {String} msgVpnName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.msgVpnName = undefined;
+
+/**
+ * The name of the OAuth Provider. Deprecated since 2.25. Replaced by authenticationOauthProfiles.
+ * @member {String} oauthProviderName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.oauthProviderName = undefined;
+
+/**
+ * Indicates whether to ignore time limits and accept tokens that are not yet valid or are no longer valid. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} tokenIgnoreTimeLimitsEnabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIgnoreTimeLimitsEnabled = undefined;
+
+/**
+ * The one minute average of the time required to complete a token introspection, in milliseconds (ms). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} tokenIntrospectionAverageTime
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionAverageTime = undefined;
+
+/**
+ * The reason for the last token introspection failure. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} tokenIntrospectionLastFailureReason
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionLastFailureReason = undefined;
+
+/**
+ * The timestamp of the last token introspection failure. This value represents the number of seconds since 1970-01-01 00:00:00 UTC (Unix time). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} tokenIntrospectionLastFailureTime
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionLastFailureTime = undefined;
+
+/**
+ * The parameter name used to identify the token during access token introspection. A standards compliant OAuth introspection server expects \"token\". Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} tokenIntrospectionParameterName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionParameterName = undefined;
+
+/**
+ * The number of token introspection successes. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} tokenIntrospectionSuccessCount
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionSuccessCount = undefined;
+
+/**
+ * The maximum time in seconds a token introspection is allowed to take. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Number} tokenIntrospectionTimeout
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionTimeout = undefined;
+
+/**
+ * The token introspection URI of the OAuth authentication server. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} tokenIntrospectionUri
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionUri = undefined;
+
+/**
+ * The username to use when logging into the token introspection URI. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} tokenIntrospectionUsername
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.tokenIntrospectionUsername = undefined;
+
+/**
+ * The username claim name, indicating which part of the object to use for determining the username. Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {String} usernameClaimName
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.usernameClaimName = undefined;
+
+/**
+ * Allowed values for the <code>usernameClaimSource</code> property.
+ * @enum {String}
+ * @readonly
+ */
+MsgVpnAuthenticationOauthProviderModel.UsernameClaimSourceEnum = {
+  /**
+   * value: "access-token"
+   * @const
+   */
+  accessToken: "access-token",
+
+  /**
+   * value: "id-token"
+   * @const
+   */
+  idToken: "id-token",
+
+  /**
+   * value: "introspection"
+   * @const
+   */
+  introspection: "introspection"
+};
+/**
+ * The username claim source, indicating where to search for the username value. The allowed values and their meaning are:  <pre> \"access-token\" - The OAuth v2 access_token. \"id-token\" - The OpenID Connect id_token. \"introspection\" - The result of introspecting the OAuth v2 access_token. </pre>  Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {module:model/MsgVpnAuthenticationOauthProviderModel.UsernameClaimSourceEnum} usernameClaimSource
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.usernameClaimSource = undefined;
+
+/**
+ * Indicates whether the API provided username will be validated against the username calculated from the token(s). Deprecated since 2.25. authenticationOauthProviders replaced by authenticationOauthProfiles.
+ * @member {Boolean} usernameValidateEnabled
+ */
+MsgVpnAuthenticationOauthProviderModel.prototype.usernameValidateEnabled = undefined;
+

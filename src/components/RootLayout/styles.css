@@ -1,0 +1,35 @@
+.rootLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.rootLayout header {
+  flex: 0 1 auto;
+}
+
+.rootLayout menu {
+  margin: 0px;
+  padding: 0px;
+  flex: 0 1 auto;
+  list-style-type: none;
+}
+
+.rootLayout main {
+  flex: 1 1 auto;
+  flex-direction: row;
+  display: flex;
+  align-items: stretch;
+  border-top: 2px solid black;
+}
+
+.rootLayout main aside {
+  flex: 0 1 auto;
+  min-width: 300px;
+  border-right: 2px solid black;
+}
+
+.rootLayout main section {
+  flex: 1 1 auto;
+}

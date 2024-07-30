@@ -1,0 +1,36 @@
+.messageList .messageListEntry {
+  cursor: pointer;
+}
+
+.messageList .messageRow {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+}
+
+.messageList .messageRow.messageRowHeader {
+  font-weight: bold;
+  margin-top: 10px;
+  margin-bottom: 10px;
+}
+
+.messageList .messageRow.messageEntry:hover {
+  cursor: pointer;
+  color: #00c895;
+  background-color: #444444;
+}
+
+.messageList .messageListEntry.selected {
+  color: #00a174;
+  background-color: darkslategray;
+}
+
+.messageList input {
+  border: 1px solid white;
+}
+
+
+
+.messageList .messageRow div {
+  flex: 1;
+}

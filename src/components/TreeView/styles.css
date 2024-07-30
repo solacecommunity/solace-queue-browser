@@ -1,0 +1,24 @@
+.treeview {
+  list-style-type: none;
+  margin: 0px;
+  padding: 4px;
+}
+
+.treeview .caret {
+  cursor: pointer;
+  user-select: none;
+}
+
+.treeview .caret::before {
+  content: "\25B6";
+  display: inline-block;
+  margin-right: 6px;
+}
+
+.treeview .caret-down::before {
+  transform: rotate(90deg);
+}
+
+.caret-up ul {
+  display: none;
+}
