@@ -2,6 +2,8 @@
   list-style-type: none;
   margin: 0px;
   padding: 4px;
+  overflow-y: auto;
+  height: 100%;
 }
 
 .treeview .caret {

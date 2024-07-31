@@ -1,32 +1,18 @@
-import "./App.css";
+import { createTheme, MantineProvider, DEFAULT_THEME } from '@mantine/core';
 
-import RootLayout from "./components/RootLayout";
+import TitleBar from './components/TitleBar';
+import Toolbar from './components/Toolbar';
+import RootLayout from './components/RootLayout';
 
-import { ApiClient as MonitorClient, QueueApi as QueueMonitorApi } from "./utils/solace/semp/monitor";
-import { ApiClient as ConfigClient, QueueApi as QueueConfigApi } from "./utils/solace/semp/config";
-import { ApiClient as ActionClient, QueueApi as QueueActionApi } from './utils/solace/semp/action';
+import '@mantine/core/styles.css';
+import './App.css';
 
-function App() {
-  function createApi(ClientCtor, ApiCtor, basePath, username, password) {
-    const client = new ClientCtor();
-    Object.assign(client, { basePath });
-    Object.assign(client.authentications.basicAuth, { username, password });
-    return new ApiCtor(client);
-  }
-
-  Object.assign(window, {
-    createApi,
-    MonitorClient,
-    ConfigClient,
-    ActionClient,
-    QueueMonitorApi,
-    QueueConfigApi,
-    QueueActionApi
-  });
-
+export default function App() {
   return (
-    <RootLayout />
+    <MantineProvider theme={DEFAULT_THEME} defaultColorScheme="dark">
+      <TitleBar />
+      <Toolbar />
+      <RootLayout />
+    </MantineProvider>
   );
 }
-
-export default App;

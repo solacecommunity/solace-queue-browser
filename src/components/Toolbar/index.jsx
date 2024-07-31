@@ -1,7 +1,11 @@
+import { Button } from "@mantine/core";
+
+import styles from './style.module.css';
+
 export default function Toolbar() {
   return (
-    <>
-      <li><button type="button">Add Server</button></li>
-    </>
+    <nav className={styles.toolbar}>
+      <Button variant="default" size="xs">Add Server</Button>
+    </nav>
   );
 }

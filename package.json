@@ -10,6 +10,9 @@
     "tauri": "tauri"
   },
   "dependencies": {
+    "@mantine/core": "^7.11.2",
+    "@mantine/hooks": "^7.11.2",
+    "@tabler/icons-react": "^3.11.0",
     "@tauri-apps/api": "^1",
     "dockview": "^1.15.2",
     "flexlayout-react": "^0.7.15",
@@ -21,6 +24,9 @@
   "devDependencies": {
     "@tauri-apps/cli": "^1",
     "@vitejs/plugin-react": "^4.2.1",
+    "postcss": "^8.4.40",
+    "postcss-preset-mantine": "^1.17.0",
+    "postcss-simple-vars": "^7.0.1",
     "vite": "^5.3.1"
   }
 }
