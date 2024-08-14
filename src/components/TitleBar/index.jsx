@@ -1,48 +1,78 @@
 import { appWindow } from "@tauri-apps/api/window";
 
-import { Container, Title, Group, ActionIcon, useMantineColorScheme } from "@mantine/core";
-import { IconSun, IconMoon, IconMinus, IconSquare, IconSquares, IconX } from '@tabler/icons-react';
+import { Toolbar } from 'primereact/toolbar';
+import { Button } from 'primereact/button';
+import { PrimeIcons } from 'primereact/api';
 
-import classes from './style.module.css';
+import classes from './styles.module.css';
+import { useEffect, useState } from "react";
 
 export default function TitleBar() {
-  const { colorScheme, setColorScheme } = useMantineColorScheme();
+  const [colorScheme, setColorScheme] = useState('dark');
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const isColorSchemeDark = () => colorScheme === 'dark';
 
+  useEffect(() => {
+    appWindow.isMaximized().then(setIsMaximized);
+    appWindow.onResized(() => {
+      appWindow.isMaximized().then(setIsMaximized);
+    });
+  }, []);
+
   const toggleTheme = () => {
-    setColorScheme(isColorSchemeDark() ? 'light' : 'dark');
+    setColorScheme(prev => {
+      const next = isColorSchemeDark() ? 'light' : 'dark';
+      window.document.getElementById(`theme-${prev}`).rel = 'prefetch';
+      window.document.getElementById(`theme-${next}`).rel = 'stylesheet';
+      return next;
+    });
   };
 
-  const iconVariant = 'subtle';
-  const iconSize = 'sm';
-  const iconColor = 'text';
+  const minimizeWindow = () => {
+    appWindow.minimize();
+  };
 
-  Object.assign(window, { appWindow });
+  const restoreWindow = () => {
+    setIsMaximized(false);
+    appWindow.unmaximize();
+  };
+
+  const maximizeWindow = () => {
+    setIsMaximized(true);
+    appWindow.maximize();
+  };
+
+  const closeWindow = () => {
+    appWindow.close();
+  };
+
+  const AppTitle = () => {
+    return (
+      <>
+        <span style={{ paddingLeft: '1em' }}>Solace Queue Browser</span>
+      </>
+    )
+  }
+
+  const ControlButtons = () => {
+    return (
+      <>
+        <Button text icon={PrimeIcons.SUN} onClick={toggleTheme} />
+        <Button text icon={PrimeIcons.MINUS} onClick={minimizeWindow} />
+        { 
+          isMaximized ? 
+          <Button text icon={PrimeIcons.WINDOW_MINIMIZE} onClick={restoreWindow} /> :
+          <Button text icon={PrimeIcons.WINDOW_MAXIMIZE} onClick={maximizeWindow} />        
+        }
+        <Button text icon={PrimeIcons.TIMES} onClick={closeWindow} />
+      </>
+    )
+  };
 
   return (
-    <header className={classes.header} data-tauri-drag-region>
-      <Container fluid className={classes.inner} data-tauri-drag-region>
-        <Title order={4} data-tauri-drag-region>Solace Queue Browser</Title>
-        <Group justify="flex-end">
-          <ActionIcon variant={iconVariant} size={iconSize} color={iconColor} onClick={toggleTheme}>
-            {
-              isColorSchemeDark() ?
-              <IconSun /> :
-              <IconMoon />
-            }
-          </ActionIcon>
-          <ActionIcon variant={iconVariant} size={iconSize} color={iconColor}>
-            <IconMinus />
-          </ActionIcon>
-          <ActionIcon variant={iconVariant} size={iconSize} color={iconColor}>
-            <IconSquare size={14} />
-          </ActionIcon>
-          <ActionIcon variant={iconVariant} size={iconSize} color={iconColor}>
-            <IconX />
-          </ActionIcon>
-        </Group>
-      </Container>
-    </header>
+    <Toolbar className={classes.toolbar} data-tauri-drag-region
+      start={AppTitle}
+      end={ControlButtons} />
   );
 }

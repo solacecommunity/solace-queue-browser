@@ -1,11 +1,20 @@
-import { Button } from "@mantine/core";
+import { useState } from 'react';
 
-import styles from './style.module.css';
+import { Toolbar as PrimeToolbar } from 'primereact/toolbar';
+import { Button } from 'primereact/button';
+
+import ConfigServerDialog from '../ConfigServerDialog';
+
+import styles from './styles.module.css';
+import { useSolaceConfigContext } from '../../hooks/solace';
 
 export default function Toolbar() {
+  const [newServerConfig, setNewServerConfig] = useState(null);
+
   return (
-    <nav className={styles.toolbar}>
-      <Button variant="default" size="xs">Add Server</Button>
-    </nav>
+    <>
+      <PrimeToolbar className={styles.toolbar} start={() => <Button size="small" onClick={() => setNewServerConfig({})}>Add Server</Button>} />
+      <ConfigServerDialog config={newServerConfig} onHide={() => setNewServerConfig(null)} />
+    </>
   );
 }

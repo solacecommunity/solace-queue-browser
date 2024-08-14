@@ -1,57 +1,132 @@
 import { useEffect, useState } from 'react';
+
+import { DataTable } from 'primereact/datatable';
+import { Column } from 'primereact/column';
+import { Calendar } from 'primereact/calendar';
+import { Button } from 'primereact/button';
+import { Toolbar } from 'primereact/toolbar';
+import { InputText } from 'primereact/inputtext';
+import { IconField } from 'primereact/iconfield';
+import { InputIcon } from 'primereact/inputicon';
+
 import { useSolaceQueueContext } from "../../hooks/solace";
 
-import './styles.css';
+import classes from './styles.module.css';
+import { FilterMatchMode } from 'primereact/api';
+
 
 export default function MessageList() {
-  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage, fromTime, setFromTime } = useSolaceQueueContext();
-  const [ fromTimeInput, setFromTimeInput ] = useState('');
+  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage } = useSolaceQueueContext();
+
+  const [ dateTime, setDateTime ] = useState(null);
+  const [ fromTime, setFromTime ] = useState(null);
+
+  const [ globalFilterValue, setGlobalFilterValue ] = useState('');
+  const [ filters, setFilters] = useState({
+    global: { value: null, matchMode: FilterMatchMode.CONTAINS }
+  });
 
   useEffect(() => {
-    getMessages();
+    getMessages({ fromTime });
   }, [queueDefinition, fromTime]);
 
 
-  const handleFromTimeInputChange = (e) => {
-    setFromTimeInput(e.target.value);
-  }
 
   const handleRefreshClick = () => {
     try {
-      setFromTime(Math.floor(Date.parse(fromTimeInput) / 1000));
+      setFromTime(Math.floor(Date.parse(dateTime) / 1000));
     } catch {
       console.log('Invalid date format');
       setFromTime(null);
     }
   };
 
-  const formatDateTime = (epoch) => new Date(epoch * 1000).toISOString().replace('T', ' ').slice(0,19);
+  const handleFirstClick = () => {
+    getMessages({ firstPage: true });
+  };
+
+  const handleNextClick = () => {
+    getMessages({ afterMsg: messages[messages.length - 1].rgmid });
+  };
+
+  const handlePrevClick = () => {
+    getMessages({ prevPage: true });
+  };
+
+  const handleCalendarChange = (e) => {
+    setDateTime(e.value);
+  };
+
+  const handleRowSelection = (e) => {
+    setActiveMessage(e.value);
+  };
+
+  const handleFilterChange = (e) => {
+    const value = e.target.value;
+    console.log('filters', filters);
+    setFilters({ global: { ...filters.global, value}});
+    setGlobalFilterValue(value);
+};
+
+
+  const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
+  const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
+  //const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toString();
+  
+  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.spooledTime)});
+
+  const Header = () => {
+    return (
+        <div className="flex justify-content-end">
+            <IconField iconPosition="left">
+                <InputIcon className="pi pi-search" />
+                <InputText value={globalFilterValue} onChange={handleFilterChange} placeholder="Payload Search" />
+            </IconField>
+        </div>
+    );
+  };
+
+  const Footer = () => {
+    return (
+      <div>
+        <Button text onClick={handleFirstClick}>First</Button>
+        <Button text onClick={handlePrevClick}>&lt; Prev</Button>
+        <Button text onClick={handleNextClick}>Next &gt;</Button>
+      </div>
+    );
+  };
 
   return (
     queueDefinition.queueName ? (
-      <div className="messageList">
-        <h4>Queue | {queueDefinition?.queueName}</h4>
-        <div>
-          <span>From: <input onChange={handleFromTimeInputChange} value={fromTimeInput}></input></span>
-          <button onClick={handleRefreshClick}>Refresh</button>
-        </div>
-        <div className="messageRow messageRowHeader">
-          <div>Message ID</div>
-          <div>Spooled Time</div>
-          <div>Payload Size (B)</div>
-        </div>
-        <div>
-          {
-            messages.map(msg => (
-              <div className={msg.msgId === activeMessage.msgId ? 'messageRow messageListEntry selected' : 'messageRow messageListEntry'} key={msg.rgmid} onClick={() => setActiveMessage(msg)}>
-                <div>{msg.msgId}</div>
-                <div>{formatDateTime(msg.spooledTime)}</div>
-                <div>{msg.size}</div>
-              </div>
-              
-              // <div className={msg.msgId === activeMessage.msgId ? 'messageListEntry selected' : 'messageListEntry'} key={msg.rgmid} onClick={() => setActiveMessage(msg)}>{msg.msgId}, {formatDateTime(msg.spooledTime)},  {msg.size}</div>
-            ))
-          }
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%'}}>
+        <Toolbar className={classes.messageListToolbar}
+          start={() => <h3>Queue | {queueDefinition?.queueName}</h3>}
+          end={() => <>
+            <label>From: &nbsp;</label>
+            <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" />
+            <Button onClick={handleRefreshClick} size="small">Refresh</Button>
+          </>}
+        />
+        <div style={{ flex: '1', overflow: 'hidden'}}>
+          <DataTable
+            className={classes.messageListTable}
+            value={messages.map(formatData)}
+            size="small" 
+            scrollable
+            resizableColumns 
+            selectionMode="single"
+            selection={activeMessage}
+            dataKey="replicationGroupMsgId"
+            onSelectionChange={handleRowSelection}
+            globalFilterFields={['payload']}
+            filters={filters}
+            header={Header}
+            footer={Footer}
+          >
+            <Column field="msgId" header="Message ID" />
+            <Column field="spooledTime" header="Spooled Time" />
+            <Column field="size" header="Payload Size (B)" />
+          </DataTable>
         </div>
       </div>
     ) : (

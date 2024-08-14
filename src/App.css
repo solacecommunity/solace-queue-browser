@@ -1,9 +1,56 @@
+html {
+  font-size: 14px;
+}
+
 body {
   margin: 0px;
   overflow: hidden;
+  height: 100vh;
+  width: 100vw;
 }
 
 #app {
-  height: 100vh;
-  width: 100vw;
+  border: 1px solid var(--surface-border);
+  background-color: var(--surface-ground);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+#app main {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+}
+
+.p-toolbar {
+  border: unset;
+  padding: 2px;
+}
+
+.p-splitter {
+  border: unset;
+  background: unset;
+  border-radius: unset;
+}
+
+.p-splitter-panel {
+  overflow: hidden;
+}
+
+.p-tree {
+  border: unset;
+  background: unset;
+  border-radius: unset;
+  padding: unset;
+}
+
+.p-tree-toggler {
+  height: 1rem;
+}
+
+.p-treenode-content {
+  padding: 0.1rem;
 }
