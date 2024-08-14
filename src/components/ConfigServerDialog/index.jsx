@@ -15,8 +15,6 @@ export default function ConfigServerDialog( { config, onHide }) {
   const visible = (config !== null);
   const [values, setValues] = useState({});
 
-  if(visible) console.log(config);
-
   useEffect(() => {
     setValues({
       id: 0,

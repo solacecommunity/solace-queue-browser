@@ -18,8 +18,11 @@ const SolaceConfigContext = createContext(null);
 const SolaceQueueContext = createContext([{}, () => { }]);
 
 export function SolaceConfigProvider({ children }) {
+  const [brokers, setBrokers] = useState([]);
+
   useEffect(() => {
     (async () => {
+      fs.createDir('', { dir: BaseDirectory.AppConfig, recursive: true });
       if (await fs.exists('config.json', { dir: BaseDirectory.AppConfig })) {
         const configData = await fs.readTextFile('config.json', { dir: BaseDirectory.AppConfig })
         setBrokers(JSON.parse(configData));
@@ -28,8 +31,6 @@ export function SolaceConfigProvider({ children }) {
       }
     })();
   }, []);
-
-  const [brokers, setBrokers] = useState([]);
 
   const saveBroker = (config) => {
     const match = brokers.find(b => b.id === config.id);
