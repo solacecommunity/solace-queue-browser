@@ -1,10 +1,9 @@
 import { fetch } from '@tauri-apps/api/http';
 
 export async function getQueues(brokerConfig) {
-  const { hostName, useTls, vpn, sempUsername, sempPassword } = brokerConfig;
-  const url = useTls ?
-    `https://${hostName}:943/SEMP/v2/monitor/msgVpns/${vpn}/queues?count=100&select=queueName` :
-    `http://${hostName}:8080/SEMP/v2/monitor/msgVpns/${vpn}/queues?count=100&select=queueName`;
+  const { hostName, sempPort, useTls, vpn, sempUsername, sempPassword } = brokerConfig;
+  const url =
+    `${(useTls ? 'https': 'http')}://${hostName}:${sempPort}/SEMP/v2/monitor/msgVpns/${vpn}/queues?count=100&select=queueName`;
   
   const start = Date.now();
 

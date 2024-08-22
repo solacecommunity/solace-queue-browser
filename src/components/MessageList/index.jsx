@@ -16,7 +16,7 @@ import { FilterMatchMode } from 'primereact/api';
 
 
 export default function MessageList() {
-  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage } = useSolaceQueueContext();
+  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage, isLoading } = useSolaceQueueContext();
 
   const [ dateTime, setDateTime ] = useState(null);
   const [ fromTime, setFromTime ] = useState(null);
@@ -30,13 +30,11 @@ export default function MessageList() {
     getMessages({ fromTime });
   }, [queueDefinition, fromTime]);
 
-
-
   const handleRefreshClick = () => {
     try {
       setFromTime(Math.floor(Date.parse(dateTime) / 1000));
     } catch {
-      console.log('Invalid date format');
+      console.error('Invalid date format');
       setFromTime(null);
     }
   };
@@ -122,6 +120,8 @@ export default function MessageList() {
             filters={filters}
             header={Header}
             footer={Footer}
+            loading={isLoading}
+            emptyMessage="No messages available"
           >
             <Column field="msgId" header="Message ID" />
             <Column field="spooledTime" header="Spooled Time" />

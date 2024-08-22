@@ -20,6 +20,8 @@ export default function ConfigServerDialog( { config, onHide }) {
       id: 0,
       displayName: '',
       hostName: '',
+      clientPort: '',
+      sempPort: '',
       useTls: false,
       vpn: '',
       clientUsername: '',
@@ -91,9 +93,19 @@ export default function ConfigServerDialog( { config, onHide }) {
             <InputText id="hostName" className={classes.formInput} value={values.hostName} onChange={handleInputChange} />
             <label htmlFor="hostName">Hostname</label>
         </FloatLabel>
-        <div className={classes.formField}>
-          <Checkbox id="useTls" onChange={handleInputChange} checked={values.useTls}/>
-          <label htmlFor="useTls" className={classes.checkboxLabel}>Use TLS</label>
+        <div className={classes.formField} style={{display:'flex', gap: '0.6rem'}}>
+          <FloatLabel style={{flex: 1}}>
+              <InputText id="clientPort" className={classes.formInput} value={values.clientPort} onChange={handleInputChange} />
+              <label htmlFor="clientPort">WS Port</label>
+          </FloatLabel>
+          <FloatLabel style={{flex: 1}}>
+              <InputText id="sempPort" className={classes.formInput} value={values.sempPort} onChange={handleInputChange} />
+              <label htmlFor="sempPort">SEMP Port</label>
+          </FloatLabel>
+          <div style={{flex: 1}}>
+            <Checkbox id="useTls" onChange={handleInputChange} checked={values.useTls} style={{height:'100%', paddingTop:'0.5rem'}}/>
+            <label htmlFor="useTls" className={classes.checkboxLabel}>Use TLS</label>
+          </div>
         </div>
         <FloatLabel className={classes.formField}>
             <InputText id="vpn" className={classes.formInput} value={values.vpn} onChange={handleInputChange} />
