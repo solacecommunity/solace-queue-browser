@@ -109,6 +109,13 @@ export function SolaceQueueContextProvider({ children }) {
 
     setIsLoading(true);
 
+    const timeLog = (() => {
+      const startTime = Date.now();
+      return (message) => {
+        console.log(`${(Date.now() - startTime).toString().padStart(6,'0')}: ${message}`);
+      };
+    })();
+
     function createApi(ClientCtor, ApiCtor, apiBase) {
       const client = new ClientCtor();
       Object.assign(client, { 
@@ -118,11 +125,26 @@ export function SolaceQueueContextProvider({ children }) {
       return new ApiCtor(client);
     }
 
+    timeLog('starting browser');
+
     const queueMonitorApi = createApi(ApiClient, QueueMonitorApi, `monitor`);
     const replayLogMonitorApi = createApi(ApiClient, ReplayLogApi, `monitor`);
 
-    const queue = await queueMonitorApi.getMsgVpnQueue(vpn, queueName, { select: [ 'lowestMsgId' ]});
-    const subscriptions = await queueMonitorApi.getMsgVpnQueueSubscriptions(vpn, queueName);
+    const session = solace.SolclientFactory.createSession({
+      url: `${(useTls ? 'wss': 'ws')}://${hostName}:${clientPort}`,
+      vpnName: vpn,
+      userName: clientUsername,
+      password: clientPassword
+    });
+
+    const [queue, subscriptions] = await Promise.all([
+      queueMonitorApi.getMsgVpnQueue(vpn, queueName, { select: [ 'lowestMsgId' ]}),
+      queueMonitorApi.getMsgVpnQueueSubscriptions(vpn, queueName),
+      new Promise(rs => {
+        session.on(solace.SessionEventCode.UP_NOTICE, rs);
+        session.connect();
+      })
+    ]);
 
     let replayFrom;
     if (prevPage) {
@@ -163,58 +185,52 @@ export function SolaceQueueContextProvider({ children }) {
       replayFrom = null;
     }
 
-    const session = solace.SolclientFactory.createSession({
-      url: `${(useTls ? 'wss': 'ws')}://${hostName}:${clientPort}`,
-      vpnName: vpn,
-      userName: clientUsername,
-      password: clientPassword
-    });
-
-    await new Promise(rs => {
-      session.on(solace.SessionEventCode.UP_NOTICE, rs);
-      session.connect();
-    });
-
-    console.log('connected to broker');
+    timeLog('connected to broker');
 
     const tempQueueName = `#QB/${queueName}/${Date.now()}`;
+    const queueDescriptor = { name: tempQueueName, type: solace.QueueType.QUEUE };
 
-    const subscribingConsumer = session.createMessageConsumer({
-      queueDescriptor: { name: tempQueueName, type: solace.QueueType.QUEUE },
-      createIfMissing: true,
+    session.provisionEndpoint(queueDescriptor, {}, true);
+    await new Promise(onProvision => session.once(solace.SessionEventCode.PROVISION_OK, onProvision));
+    timeLog('queue created');
+
+    const messageConsumer = session.createMessageConsumer({
+      queueDescriptor,
+      acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
+      replayStartLocation: 
+        replayFrom.afterMsg ? solace.SolclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
+        replayFrom.fromTime ? solace.SolclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
+        solace.SolclientFactory.createReplayStartLocationBeginning()
     });
-
-    subscribingConsumer.connect();
-    await new Promise(onConnect => subscribingConsumer.once(solace.MessageConsumerEventName.UP, onConnect));
 
     let subscriptionCount = subscriptions.data.length + 1;
     const allSubscriptionsAdded = new Promise((resolve) => {
       const onSubscriptionOkOrError = () => {
         subscriptionCount--;
-        console.log('subscriptionCount', subscriptionCount);
+        timeLog('subscriptionCount', subscriptionCount);
         if(subscriptionCount <= 0) {
-          subscribingConsumer.removeListener(
+          messageConsumer.removeListener(
             solace.MessageConsumerEventName.SUBSCRIPTION_OK, onSubscriptionOkOrError);
-          subscribingConsumer.removeListener(
+          messageConsumer.removeListener(
             solace.MessageConsumerEventName.SUBSCRIPTION_ERROR, onSubscriptionOkOrError);
           resolve();
         }
       };
 
-      subscribingConsumer.on(
+      messageConsumer.on(
         solace.MessageConsumerEventName.SUBSCRIPTION_OK, onSubscriptionOkOrError);
-      subscribingConsumer.on(
+      messageConsumer.on(
         solace.MessageConsumerEventName.SUBSCRIPTION_ERROR, onSubscriptionOkOrError);
     });
 
-    subscribingConsumer.addSubscription(
+    messageConsumer.addSubscription(
       solace.SolclientFactory.createTopicDestination(`#P2P/QUE/${queueName}`),
       'queue',
       2000
     );
 
     subscriptions.data.forEach(sub => {
-      subscribingConsumer.addSubscription(
+      messageConsumer.addSubscription(
         solace.SolclientFactory.createTopicDestination(sub.subscriptionTopic),
         sub.subscriptionTopic,
         2000
@@ -223,51 +239,47 @@ export function SolaceQueueContextProvider({ children }) {
 
     await allSubscriptionsAdded;
 
-    console.log('disconnecting subscriber');
-    subscribingConsumer.disconnect();
-    await new Promise(onDisconnect => subscribingConsumer.once(solace.MessageConsumerEventName.DOWN, onDisconnect));
-    console.log('disconnected');
+    timeLog('replayFrom', replayFrom, messageConsumer, new Date(replayFrom.fromTime));
 
-    const replayConsumer = session.createMessageConsumer({
-      queueDescriptor: { name: tempQueueName, type: solace.QueueType.QUEUE },
-      acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
-      replayStartLocation: 
-      replayFrom.afterMsg ? solace.SolclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
-      replayFrom.fromTime ? solace.SolclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
-      solace.SolclientFactory.createReplayStartLocationBeginning()
-    });
-    console.log('replayFrom', replayFrom, replayConsumer, new Date(replayFrom.fromTime));
-
+    const MESSAGE_TIMEOUT = 500;
     let messages = [];
     let allMessagesReceived = new Promise(resolveGotAllMessages => {
-      const messageTimeout = setTimeout(() => { 
+      const onMessageTimeout = () => { 
         console.warn('Timeout waiting for messages');
         resolveGotAllMessages();
-      }, 2000);
+      };
 
-      replayConsumer.on(solace.MessageConsumerEventName.MESSAGE, msg => {
+      let messageTimeout = setTimeout(onMessageTimeout, MESSAGE_TIMEOUT);
+
+      messageConsumer.on(solace.MessageConsumerEventName.MESSAGE, msg => {
+        timeLog('got message');
         messages.push(msg);
+        clearTimeout(messageTimeout);
+
         if (messages.length >= count) {
-          clearTimeout(messageTimeout);
-          replayConsumer.stop();
+          messageConsumer.stop();
           resolveGotAllMessages();
+          return;
         }
+        messageTimeout = setTimeout(onMessageTimeout, MESSAGE_TIMEOUT);
       });
     });
 
-    replayConsumer.connect();
+    timeLog('connecting consumer');
+    messageConsumer.once(solace.MessageConsumerEventName.UP, () => timeLog('consumer up'));
+    messageConsumer.connect();
 
     await allMessagesReceived;
-
     
-    console.log('disconnecting consumer');
-    replayConsumer.disconnect();
-    await new Promise(onDisconnect => replayConsumer.once(solace.MessageConsumerEventName.DOWN, onDisconnect));
-    console.log('disconnected');
-    
-    const msgMetaData = await queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
-    
-    session.deprovisionEndpoint({ name: tempQueueName, type: solace.QueueType.QUEUE });
+    timeLog('getting metadata');
+    const [msgMetaData] = await Promise.all([
+      queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count }),
+      //new Promise(onDisconnect => messageConsumer.once(solace.MessageConsumerEventName.DOWN, onDisconnect))
+    ]);
+        
+    timeLog('disconnecting consumer');
+    messageConsumer.disconnect();
+    session.deprovisionEndpoint(queueDescriptor);
     session.disconnect();
 
     setReplayPages([...replayPages]);
