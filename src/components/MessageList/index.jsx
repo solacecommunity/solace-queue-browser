@@ -56,7 +56,9 @@ export default function MessageList() {
   };
 
   const handleRowSelection = (e) => {
-    setActiveMessage(e.value);
+    if(e.value !== null) {
+      setActiveMessage(e.value);
+    }
   };
 
   const handleFilterChange = (e) => {
