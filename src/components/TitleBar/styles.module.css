@@ -1,0 +1,6 @@
+.toolbar {
+  padding: 0px;
+  border: unset;
+  background-color: var(--surface-ground);
+  user-select: none;
+}

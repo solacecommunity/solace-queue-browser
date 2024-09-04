@@ -1,0 +1,25 @@
+.formDialog {
+  width: 400px;
+}
+
+.formField {
+  margin-top: 28px;
+  width: 100%;
+}
+
+.formInput {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.passwordInput {
+  width: 100%;
+}
+
+.passwordInput input {
+  width: 100%
+}
+
+.checkboxLabel {
+  margin-left: 1rem;
+}

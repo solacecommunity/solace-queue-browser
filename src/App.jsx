@@ -1,32 +1,37 @@
-import "./App.css";
+// import { createTheme, MantineProvider, DEFAULT_THEME } from '@mantine/core';
 
-import RootLayout from "./components/RootLayout";
+import TitleBar from './components/TitleBar';
+import Toolbar from './components/Toolbar';
+import RootLayout from './components/RootLayout';
 
-import { ApiClient as MonitorClient, QueueApi as QueueMonitorApi } from "./utils/solace/semp/monitor";
-import { ApiClient as ConfigClient, QueueApi as QueueConfigApi } from "./utils/solace/semp/config";
-import { ApiClient as ActionClient, QueueApi as QueueActionApi } from './utils/solace/semp/action';
+import { PrimeReactContext, PrimeReactProvider } from 'primereact/api';
+import { Button } from 'primereact/button';
 
-function App() {
-  function createApi(ClientCtor, ApiCtor, basePath, username, password) {
-    const client = new ClientCtor();
-    Object.assign(client, { basePath });
-    Object.assign(client.authentications.basicAuth, { username, password });
-    return new ApiCtor(client);
-  }
+import 'primeicons/primeicons.css';
 
-  Object.assign(window, {
-    createApi,
-    MonitorClient,
-    ConfigClient,
-    ActionClient,
-    QueueMonitorApi,
-    QueueConfigApi,
-    QueueActionApi
-  });
+import './App.css';
+import { SolaceConfigProvider } from './hooks/solace';
+
+export default function App() {
+
+  const primeConfig = {
+    cssTransition: false,
+    ripple: false
+  };
 
   return (
-    <RootLayout />
+    <PrimeReactProvider value={primeConfig}>
+      <SolaceConfigProvider>
+      <header>
+        <TitleBar />
+      </header>
+      <nav>
+        <Toolbar />
+      </nav>
+      <main>
+        <RootLayout />
+      </main>
+      </SolaceConfigProvider>
+    </PrimeReactProvider>
   );
 }
-
-export default App;

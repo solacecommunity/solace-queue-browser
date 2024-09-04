@@ -1,38 +1,26 @@
-import { useState } from 'react';
+import { Splitter, SplitterPanel } from 'primereact/splitter';
 
-import './styles.css';
-
-import TitleBar from '../TitleBar';
-import Toolbar from '../Toolbar';
 import TreeView from '../TreeView';
 import MessageList from '../MessageList';
 import MessageDetails from '../MessageDetails';
 
-import Gridview from '../GridLayout';
 import { SolaceQueueContextProvider } from '../../hooks/solace';
 
 
-export default function RootLayout() {
-  // const DefaultComponent = ({title}) => (
-  //   <div style={{ padding: '20px', color: 'white' }}>
-  //     {title}
-  //   </div>
-  // );
 
+export default function RootLayout() {
   return (
-    <div className="rootLayout">
-      <header><TitleBar /></header>
-      <menu><Toolbar /></menu>
-      <SolaceQueueContextProvider>
-        <main>
-          <Gridview
-            leftComponent={TreeView}
-            topComponent={MessageList}
-            bottomComponent={MessageDetails}
-          />
-        </main>
-      </SolaceQueueContextProvider>
-    </div>
+    <SolaceQueueContextProvider>
+      <Splitter style={{ height: '100%' }}>
+        <SplitterPanel size={25}><TreeView /></SplitterPanel>
+        <SplitterPanel size={75}>
+          <Splitter style={{ height: '100%', width: '100%' }} layout="vertical">
+            <SplitterPanel size={70}><MessageList /></SplitterPanel>
+            <SplitterPanel size={30}><MessageDetails /></SplitterPanel>
+          </Splitter>
+        </SplitterPanel>
+      </Splitter>
+    </SolaceQueueContextProvider>
   );
 }
 
