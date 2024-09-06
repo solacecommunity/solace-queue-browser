@@ -1,63 +1,10 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import solace from '../utils/solace/solclientasync';
-import { ApiClient } from "../utils/solace/semp/tauriClient";
 import { QueueApi as QueueMonitorApi, ReplayLogApi } from "../utils/solace/semp/monitor";
 
-import { fs } from "@tauri-apps/api";
-import { BaseDirectory } from "@tauri-apps/api/fs";
+import { useSempApi } from "../providers/SolaceSempProvider";
 
-const SolaceConfigContext = createContext(null);
 const SolaceQueueContext = createContext([{}, () => { }]);
-
-export function SolaceConfigProvider({ children }) {
-  const [brokers, setBrokers] = useState([]);
-
-  useEffect(() => {
-    (async () => {
-      fs.createDir('', { dir: BaseDirectory.AppConfig, recursive: true });
-      if (await fs.exists('config.json', { dir: BaseDirectory.AppConfig })) {
-        const configData = await fs.readTextFile('config.json', { dir: BaseDirectory.AppConfig })
-        setBrokers(JSON.parse(configData));
-      } else {
-        console.log('no config found');
-      }
-    })();
-  }, []);
-
-  const saveBroker = (config) => {
-    const match = brokers.find(b => b.id === config.id);
-    if (match === undefined) {
-      config.id = Date.now();
-      brokers.push(config);
-    } else {
-      Object.assign(match, config);
-    }
-    fs.writeTextFile('config.json', JSON.stringify(brokers), { dir: BaseDirectory.AppConfig });
-    setBrokers([...brokers]);
-  };
-
-  const deleteBroker = (config) => {
-    const fileredBrokers =  brokers.filter(b => b.id !== config.id);
-    fs.writeTextFile('config.json', JSON.stringify(fileredBrokers), { dir: BaseDirectory.AppConfig });
-    setBrokers(fileredBrokers);
-  };
-
-  const value = {
-    brokers,
-    saveBroker,
-    deleteBroker
-  };
-
-  return (
-    <SolaceConfigContext.Provider value={value}>
-      {children}
-    </SolaceConfigContext.Provider>
-  )
-}
-
-export function useSolaceConfigContext() {
-  return useContext(SolaceConfigContext);
-}
 
 export function SolaceQueueContextProvider({ children }) {
   const [queueDefinition, setQueueDefinition] = useState({});
@@ -65,6 +12,9 @@ export function SolaceQueueContextProvider({ children }) {
   const [isLoading, setIsLoading] = useState(false);
   const [activeMessage, setActiveMessage] = useState({});
   const [replayPages, setReplayPages] = useState([]);
+
+  const queueMonitorApi = useSempApi(QueueMonitorApi).build(queueDefinition);
+  const replayLogMonitorApi = useSempApi(ReplayLogApi).build(queueDefinition);
 
   useEffect(() => {
     replayPages.length = 0;
@@ -101,9 +51,6 @@ export function SolaceQueueContextProvider({ children }) {
       }
 
       timeLog('starting browser');
-
-      const queueMonitorApi = createMonitorApi(ApiClient, QueueMonitorApi);
-      const replayLogMonitorApi = createMonitorApi(ApiClient, ReplayLogApi);
 
       const session = solace.SolclientFactory.createAsyncSession({
         url: `${(useTls ? 'wss': 'ws')}://${hostName}:${clientPort}`,

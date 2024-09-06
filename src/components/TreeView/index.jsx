@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { useSolaceConfigContext, useSolaceQueueContext } from '../../hooks/solace';
-import { getQueues } from '../../hooks';
+import { useSolaceQueueContext } from '../../hooks/solace';
+import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
+import { useSempApi } from '../../providers/SolaceSempProvider';
+import { QueueApi } from '../../utils/solace/semp/monitor';
 
 
 import { Tree } from 'primereact/tree';
@@ -17,6 +19,7 @@ export default function TreeView() {
   
   const { brokers } = useSolaceConfigContext();
   const { setQueueDefinition } = useSolaceQueueContext();
+  const queueApi = useSempApi(QueueApi);
 
   const nodes2 = brokers.map(config => ({
     id: config.id,
@@ -33,7 +36,7 @@ export default function TreeView() {
   const handleExpand = async (event) => {
     setIsLoading(true);
     const { config } = event.node.data;
-    const queues = await getQueues(config);
+    const queues = (await queueApi.build(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
     const queueNodeList = queues
       .filter((queue) => !queue.queueName.startsWith('#'))
       .map((queue, n) => ({

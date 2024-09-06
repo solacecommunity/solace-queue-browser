@@ -4,13 +4,14 @@ import TitleBar from './components/TitleBar';
 import Toolbar from './components/Toolbar';
 import RootLayout from './components/RootLayout';
 
-import { PrimeReactContext, PrimeReactProvider } from 'primereact/api';
-import { Button } from 'primereact/button';
+import { PrimeReactProvider } from 'primereact/api';
 
 import 'primeicons/primeicons.css';
 
 import './App.css';
-import { SolaceConfigProvider } from './hooks/solace';
+import { SolaceConfigProvider } from './providers/SolaceConfigProvider';
+import { SolaceSempProvider } from './providers/SolaceSempProvider';
+import { ApiClient } from './utils/solace/semp';
 
 export default function App() {
 
@@ -22,15 +23,17 @@ export default function App() {
   return (
     <PrimeReactProvider value={primeConfig}>
       <SolaceConfigProvider>
-      <header>
-        <TitleBar />
-      </header>
-      <nav>
-        <Toolbar />
-      </nav>
-      <main>
-        <RootLayout />
-      </main>
+        <SolaceSempProvider value={ApiClient}>
+          <header>
+            <TitleBar />
+          </header>
+          <nav>
+            <Toolbar />
+          </nav>
+          <main>
+            <RootLayout />
+          </main>
+        </SolaceSempProvider>
       </SolaceConfigProvider>
     </PrimeReactProvider>
   );

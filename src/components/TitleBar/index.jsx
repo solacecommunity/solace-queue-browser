@@ -9,16 +9,8 @@ import { useEffect, useState } from "react";
 
 export default function TitleBar() {
   const [colorScheme, setColorScheme] = useState('dark');
-  const [isMaximized, setIsMaximized] = useState(false);
 
   const isColorSchemeDark = () => colorScheme === 'dark';
-
-  useEffect(() => {
-    appWindow.isMaximized().then(setIsMaximized);
-    appWindow.onResized(() => {
-      appWindow.isMaximized().then(setIsMaximized);
-    });
-  }, []);
 
   const toggleTheme = () => {
     setColorScheme(prev => {
@@ -27,24 +19,6 @@ export default function TitleBar() {
       window.document.getElementById(`theme-${next}`).rel = 'stylesheet';
       return next;
     });
-  };
-
-  const minimizeWindow = () => {
-    appWindow.minimize();
-  };
-
-  const restoreWindow = () => {
-    setIsMaximized(false);
-    appWindow.unmaximize();
-  };
-
-  const maximizeWindow = () => {
-    setIsMaximized(true);
-    appWindow.maximize();
-  };
-
-  const closeWindow = () => {
-    appWindow.close();
   };
 
   const AppTitle = () => {
@@ -56,6 +30,33 @@ export default function TitleBar() {
   }
 
   const ControlButtons = () => {
+    const [isMaximized, setIsMaximized] = useState(false);
+
+    const minimizeWindow = () => {
+      appWindow.minimize();
+    };
+  
+    const restoreWindow = () => {
+      setIsMaximized(false);
+      appWindow.unmaximize();
+    };
+  
+    const maximizeWindow = () => {
+      setIsMaximized(true);
+      appWindow.maximize();
+    };
+  
+    const closeWindow = () => {
+      appWindow.close();
+    };
+
+    useEffect(() => {
+      appWindow.isMaximized().then(setIsMaximized);
+      appWindow.onResized(() => {
+        appWindow.isMaximized().then(setIsMaximized);
+      });
+    }, []);
+
     return (
       <>
         <Button text icon={PrimeIcons.SUN} onClick={toggleTheme} />
@@ -73,6 +74,6 @@ export default function TitleBar() {
   return (
     <Toolbar className={classes.toolbar} data-tauri-drag-region
       start={AppTitle}
-      end={ControlButtons} />
+      end={window.__TAURI__ ? ControlButtons : <Button text icon={PrimeIcons.SUN} onClick={toggleTheme} />} />
   );
 }
