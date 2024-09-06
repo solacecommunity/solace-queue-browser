@@ -9,7 +9,7 @@ import { Checkbox } from 'primereact/checkbox';
 import classes from './styles.module.css';
 import { useEffect, useState } from 'react';
 
-import { useSolaceConfigContext } from '../../hooks/solace';
+import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
         
 export default function ConfigServerDialog( { config, onHide }) {
   const visible = (config !== null);

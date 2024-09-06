@@ -6,7 +6,6 @@ import { Button } from 'primereact/button';
 import ConfigServerDialog from '../ConfigServerDialog';
 
 import styles from './styles.module.css';
-import { useSolaceConfigContext } from '../../hooks/solace';
 
 export default function Toolbar() {
   const [newServerConfig, setNewServerConfig] = useState(null);
