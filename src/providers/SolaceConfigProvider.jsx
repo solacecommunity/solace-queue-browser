@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { fs } from "@tauri-apps/api";
 import { BaseDirectory } from "@tauri-apps/api/fs";
+import { fs } from '../utils/tauri/api';
 
 const SolaceConfigContext = createContext(null);
 

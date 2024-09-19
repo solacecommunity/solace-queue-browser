@@ -41,15 +41,6 @@ export function SolaceQueueContextProvider({ children }) {
         };
       })();
 
-      function createMonitorApi(ClientCtor, ApiCtor) {
-        const client = new ClientCtor();
-        Object.assign(client, { 
-          basePath: `${(useTls ? 'https': 'http')}://${hostName}:${sempPort}/SEMP/v2/monitor`
-        });
-        Object.assign(client.authentications.basicAuth, { username: sempUsername, password: sempPassword });
-        return new ApiCtor(client);
-      }
-
       timeLog('starting browser');
 
       const session = solace.SolclientFactory.createAsyncSession({

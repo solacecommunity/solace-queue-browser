@@ -1,8 +1,6 @@
-// import { createTheme, MantineProvider, DEFAULT_THEME } from '@mantine/core';
-
-import TitleBar from './components/TitleBar';
 import Toolbar from './components/Toolbar';
 import RootLayout from './components/RootLayout';
+import DesktopContainer from './components/DesktopContainer';
 
 import { PrimeReactProvider } from 'primereact/api';
 
@@ -21,15 +19,14 @@ export default function App() {
   };
 
   return (
+    window.location.pathname === '/desktop' ?
+    <DesktopContainer /> :
     <PrimeReactProvider value={primeConfig}>
       <SolaceConfigProvider>
         <SolaceSempProvider value={ApiClient}>
           <header>
-            <TitleBar />
-          </header>
-          <nav>
             <Toolbar />
-          </nav>
+          </header>
           <main>
             <RootLayout />
           </main>

@@ -1,4 +1,7 @@
-import { fetch, Body } from "@tauri-apps/api/http";
+import { Body } from "@tauri-apps/api/http";
+import { http } from '../../tauri/api';
+
+const { fetch } = http;
 
 export class ApiClient {
   constructor() {
