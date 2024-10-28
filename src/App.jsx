@@ -3,9 +3,8 @@ import { useState } from 'react';
 import Providers from './providers';
 
 import DesktopContainer from './components/DesktopContainer';
-import Toolbar from './components/Toolbar';
 import RootLayout from './components/RootLayout';
-import TreeView from './components/TreeView';
+import TreeView from './components/BrokerQueueTreeView';
 import MessageList from './components/MessageList';
 import MessageDetails from './components/MessageDetails';
 
@@ -31,7 +30,6 @@ export default function App() {
         window.location.pathname === '/desktop' ?
           <DesktopContainer /> :
           <>
-            <Toolbar />
             <RootLayout>
               <RootLayout.LeftPanel>
                 <TreeView onQueueSelected={handleQueueSelected} />

@@ -1,6 +1,6 @@
 import { PrimeReactProvider } from 'primereact/api';
 
-import { SolaceConfigProvider } from './SolaceConfigProvider';
+import { SolaceConfigProvider, ConfigSource } from './SolaceConfigProvider';
 import { SolaceSempProvider } from './SolaceSempProvider';
 import { SolaceQueueContextProvider } from '../hooks/solace';
 
@@ -15,7 +15,7 @@ export default function Providers({ children }) {
 
   return (
     <PrimeReactProvider value={primeConfig}>
-      <SolaceConfigProvider>
+      <SolaceConfigProvider source={window.__TAURI__ ? ConfigSource.FS : ConfigSource.LOCAL_STORAGE}>
         <SolaceSempProvider value={ApiClient}>
           <SolaceQueueContextProvider>
             {children}

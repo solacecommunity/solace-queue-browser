@@ -4,35 +4,47 @@ import { fs } from '../utils/tauri/api';
 
 const SolaceConfigContext = createContext(null);
 
-function writeConfig(brokers) {
-  if(window.__TAURI__) {
-    fs.writeTextFile('config.json', JSON.stringify(brokers), { dir: BaseDirectory.AppConfig });
-  } else {
-    window.localStorage.setItem('config', JSON.stringify(brokers));
-  }
-}
-
-async function readConfig() {
-  if(window.__TAURI__) {
-    fs.createDir('', { dir: BaseDirectory.AppConfig, recursive: true });
-    if (await fs.exists('config.json', { dir: BaseDirectory.AppConfig })) {
-      const configData = await fs.readTextFile('config.json', { dir: BaseDirectory.AppConfig })
-      return JSON.parse(configData);
-    } else {
-      console.log('no config found');
-      return [];
+export const ConfigSource = {
+  FS: {
+    readConfig: async () => {
+      fs.createDir('', { dir: BaseDirectory.AppConfig, recursive: true });
+      if (await fs.exists('config.json', { dir: BaseDirectory.AppConfig })) {
+        const configData = await fs.readTextFile('config.json', { dir: BaseDirectory.AppConfig })
+        return JSON.parse(configData);
+      } else {
+        console.log('no config found');
+        return [];
+      }
+    },
+    writeConfig: async (brokers) => {
+      fs.writeTextFile('config.json', JSON.stringify(brokers), { dir: BaseDirectory.AppConfig });
     }
-  } else {
-    const configData = window.localStorage.getItem('config');
-    return configData ? JSON.parse(configData) : [];
+  },
+  LOCAL_STORAGE: {
+    readConfig: async () => {
+      const configData = window.localStorage.getItem('config');
+      return configData ? JSON.parse(configData) : [];
+    },
+    writeConfig: async (brokers) => {
+      window.localStorage.setItem('config', JSON.stringify(brokers));
+    }
   }
 }
 
-export function SolaceConfigProvider({ children }) {
+export function SolaceConfigProvider({ source, children }) {
   const [brokers, setBrokers] = useState([]);
+  return (
+    <SolaceConfigContext.Provider value={{ source, brokers, setBrokers }}>
+      {children}
+    </SolaceConfigContext.Provider>
+  )
+}
+
+export function useSolaceConfigContext() {
+  const { source, brokers, setBrokers } = useContext(SolaceConfigContext);
 
   useEffect(() => {
-    readConfig().then(brokers => setBrokers(brokers));
+    source.readConfig().then(brokers => setBrokers(brokers));
   }, []);
 
   const saveBroker = (config) => {
@@ -43,29 +55,20 @@ export function SolaceConfigProvider({ children }) {
     } else {
       Object.assign(match, config);
     }
-    writeConfig(brokers);
+    source.writeConfig(brokers);
+    console.log('setbrokers')
     setBrokers([...brokers]);
   };
 
   const deleteBroker = (config) => {
     const filteredBrokers =  brokers.filter(b => b.id !== config.id);
-    writeConfig(filteredBrokers);
+    source.writeConfig(filteredBrokers);
     setBrokers(filteredBrokers);
   };
 
-  const value = {
+  return {
     brokers,
     saveBroker,
     deleteBroker
   };
-
-  return (
-    <SolaceConfigContext.Provider value={value}>
-      {children}
-    </SolaceConfigContext.Provider>
-  )
-}
-
-export function useSolaceConfigContext() {
-  return useContext(SolaceConfigContext);
 }
