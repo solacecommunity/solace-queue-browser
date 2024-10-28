@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useSolaceQueueContext } from '../../hooks/solace';
 import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
 import { useSempApi } from '../../providers/SolaceSempProvider';
 import { QueueApi } from '../../utils/solace/semp/monitor';
@@ -11,14 +10,13 @@ import ConfigServerDialog from '../ConfigServerDialog';
 import classes from './styles.module.css';
         
 
-export default function TreeView() {
+export default function TreeView({ onQueueSelected }) {
   const [ brokerForConfig, setBrokerForConfig ] = useState(null);
   const [ isLoading, setIsLoading ] = useState(false);
 
   const [ queuesListMap, setQueuesListMap ] = useState({});
   
   const { brokers } = useSolaceConfigContext();
-  const { setQueueDefinition } = useSolaceQueueContext();
   const queueApi = useSempApi(QueueApi);
 
   const nodes2 = brokers.map(config => ({
@@ -36,7 +34,7 @@ export default function TreeView() {
   const handleExpand = async (event) => {
     setIsLoading(true);
     const { config } = event.node.data;
-    const queues = (await queueApi.build(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
+    const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
     const queueNodeList = queues
       .filter((queue) => !queue.queueName.startsWith('#'))
       .map((queue, n) => ({
@@ -54,7 +52,7 @@ export default function TreeView() {
 
   const handleSelect = (event) => {
     if(event.node.data.type === 'queue') {
-      setQueueDefinition(event.node.data.config);
+      onQueueSelected?.(event.node.data.config);
     }
   };
 

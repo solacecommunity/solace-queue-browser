@@ -7,51 +7,47 @@ import { useSempApi } from "../providers/SolaceSempProvider";
 const SolaceQueueContext = createContext([{}, () => { }]);
 
 export function SolaceQueueContextProvider({ children }) {
-  const [queueDefinition, setQueueDefinition] = useState({});
-  const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeMessage, setActiveMessage] = useState({});
-  const [replayPages, setReplayPages] = useState([]);
 
-  const queueMonitorApi = useSempApi(QueueMonitorApi).build(queueDefinition);
-  const replayLogMonitorApi = useSempApi(ReplayLogApi).build(queueDefinition);
+  const build = (queueDefinition) => {
+    const [replayPages, setReplayPages] = useState([]);
 
-  useEffect(() => {
-    replayPages.length = 0;
-    setReplayPages([]);
-  }, [queueDefinition]);
+    const queueMonitorApi = useSempApi(QueueMonitorApi).with(queueDefinition);
+    const replayLogMonitorApi = useSempApi(ReplayLogApi).with(queueDefinition);
 
-  const getMessages = async ({ count = 50, fromTime, afterMsg, prevPage, firstPage } = {}) => {
-    if (!queueDefinition.queueName) {
-      return;
-    }
+    useEffect(() => {
+      replayPages.length = 0;
+      setReplayPages([]);
+    }, [queueDefinition]);
 
-    const { 
-      hostName, clientPort, sempPort, useTls,
-      vpn, queueName, 
-      clientUsername, clientPassword, sempUsername, sempPassword
-    } = queueDefinition;
+    const getMessages = async ({ count = 50, fromTime, afterMsg, prevPage, firstPage } = {}) => {
+      if (!queueDefinition.queueName) {
+        return [];
+      }
 
-      setIsLoading(true);
+      const {
+        hostName, clientPort, useTls,
+        vpn, queueName,
+        clientUsername, clientPassword,
+      } = queueDefinition;
 
       const timeLog = (() => {
         const startTime = Date.now();
         return (message) => {
-          console.log(`${(Date.now() - startTime).toString().padStart(6,'0')}: ${message}`);
+          console.log(`${(Date.now() - startTime).toString().padStart(6, '0')}: ${message}`);
         };
       })();
 
       timeLog('starting browser');
 
       const session = solace.SolclientFactory.createAsyncSession({
-        url: `${(useTls ? 'wss': 'ws')}://${hostName}:${clientPort}`,
+        url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
         vpnName: vpn,
         userName: clientUsername,
         password: clientPassword
       });
 
       const [queue, subscriptions] = await Promise.all([
-        queueMonitorApi.getMsgVpnQueue(vpn, queueName, { select: [ 'lowestMsgId' ]}),
+        queueMonitorApi.getMsgVpnQueue(vpn, queueName, { select: ['lowestMsgId'] }),
         queueMonitorApi.getMsgVpnQueueSubscriptions(vpn, queueName),
         session.connect()
       ]);
@@ -74,24 +70,24 @@ export function SolaceQueueContextProvider({ children }) {
       } else if (queue.data.lowestMsgId) {
         // check if lowestMsgId is on the replay log at all
         try {
-          const replayLogs = await replayLogMonitorApi.getMsgVpnReplayLogs(vpn, { select: [ 'replayLogName' ]});
+          const replayLogs = await replayLogMonitorApi.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
           const { replayLogName } = replayLogs.data[0];
-          
+
           const prevMessages = await replayLogMonitorApi.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
             cursor: [
               `<rpc><show><replay-log>`,
-                `<name>${replayLogName}</name>`, 
-                `<vpn-name>${vpn}</vpn-name>`,
-                `<messages/><newest/>`,
-                `<msg-id>${queue.data.lowestMsgId}</msg-id>`,
-                `<detail/>`,
-                `<num-elements>2</num-elements>`, 
+              `<name>${replayLogName}</name>`,
+              `<vpn-name>${vpn}</vpn-name>`,
+              `<messages/><newest/>`,
+              `<msg-id>${queue.data.lowestMsgId}</msg-id>`,
+              `<detail/>`,
+              `<num-elements>2</num-elements>`,
               `</replay-log></show></rpc>`,
             ].join(''),
-            select: [ 'replicationGroupMsgId' ],
+            select: ['replicationGroupMsgId'],
             count: 2
           });
-                          
+
           replayFrom = { afterMsg: prevMessages.data[1].replicationGroupMsgId };
           replayPages.push(replayFrom);
         } catch (ex) {
@@ -117,11 +113,11 @@ export function SolaceQueueContextProvider({ children }) {
         queueDescriptor,
         acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
         windowSize: 1,
-        replayStartLocation: 
+        replayStartLocation:
           replayFrom?.afterMsg ? solace.SolclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
-          replayFrom?.fromTime ? solace.SolclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
-          replayFrom ? solace.SolclientFactory.createReplayStartLocationBeginning() :
-          null
+            replayFrom?.fromTime ? solace.SolclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
+              replayFrom ? solace.SolclientFactory.createReplayStartLocationBeginning() :
+                null
       });
 
       const queueBrowser = session.createQueueBrowser({ queueDescriptor });
@@ -145,49 +141,42 @@ export function SolaceQueueContextProvider({ children }) {
       timeLog('triggering replay on consumer');
       messageConsumer.connect();
       messageConsumer.disconnect();
-      
+
       const messages = await queueBrowser.readMessages(count, 500);
-      
+
       timeLog('getting metadata');
       const msgMetaData = await queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
-          
+
       timeLog('disconnecting browser');
       queueBrowser.disconnect();
-    session.deprovisionEndpoint(queueDescriptor);
-    session.disconnect();
+      session.deprovisionEndpoint(queueDescriptor);
+      session.disconnect();
 
       setReplayPages([...replayPages]);
-      setMessages(messages.map((msg, n) => ({
+      
+      return messages.map((msg, n) => ({
         ...(msgMetaData.data[n]),
         payload: msg.getBinaryAttachment().toString(),
         size: msg.getBinaryAttachment().length,
         rgmid: msg.getReplicationGroupMessageId().toString(),
         destination: msg.getDestination(),
-      })));
-      setIsLoading(false);
+      }));
+    };
+
+    return {
+      getMessages,
+    };
   };
 
-  useEffect(() => {
-    setMessages([]);
-  }, [queueDefinition]);
+  const queueContextValue = { build };
 
   return (
-    <SolaceQueueContext.Provider value={
-      {
-        queueDefinition,
-        setQueueDefinition,
-        messages,
-        getMessages,
-        isLoading,
-        activeMessage,
-        setActiveMessage
-      }
-    }>
+    <SolaceQueueContext.Provider value={queueContextValue}>
       {children}
     </SolaceQueueContext.Provider>
   );
 }
 
-export function useSolaceQueueContext() {
-  return useContext(SolaceQueueContext);
+export function useSolaceQueueContext(queueDefinition) {
+  return useContext(SolaceQueueContext).build(queueDefinition);
 }

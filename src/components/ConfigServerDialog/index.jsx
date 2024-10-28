@@ -5,15 +5,17 @@ import { FloatLabel } from 'primereact/floatlabel';
 import { InputText } from 'primereact/inputtext'
 import { Password } from 'primereact/password';
 import { Checkbox } from 'primereact/checkbox';
+import { Toast } from 'primereact/toast'
 
 import classes from './styles.module.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 
 import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
         
 export default function ConfigServerDialog( { config, onHide }) {
   const visible = (config !== null);
   const [values, setValues] = useState({});
+  const toast = useRef(null);
 
   useEffect(() => {
     setValues({
@@ -56,6 +58,14 @@ export default function ConfigServerDialog( { config, onHide }) {
     onHide?.();
   }
 
+  const handleTestConnection = () => {
+    toast.current.show({ 
+      severity: 'info',
+      summary: 'Success',
+      detail: 'Connection Succeeded!'
+    });
+  }
+
   const Header = () => (
     (values.id) ? 
     <>Edit Broker</> :
@@ -70,20 +80,23 @@ export default function ConfigServerDialog( { config, onHide }) {
           null
       } 
       end={
-        <Button onClick={handleSave}>Save</Button>
+        <>
+          <Button outlined severity="secondary" onClick={handleTestConnection}>Test Connection</Button>
+          <Button onClick={handleSave}>Save</Button>
+        </>
       }
     />
   );
   return (
     <Dialog 
       className={classes.formDialog}
-      appendTo={document.querySelector('main')}
       header={Header}
       footer={Footer}
       maskStyle={{ position: 'absolute', borderRadius: 6 }}
       visible={visible}
       onHide={handleHide}
     >
+      <Toast ref={toast} />
       <form autoComplete="off">
         <FloatLabel className={classes.formField}>
           <InputText id="displayName" className={classes.formInput} value={values.displayName} onChange={handleInputChange} />

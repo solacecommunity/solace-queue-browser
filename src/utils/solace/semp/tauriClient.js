@@ -1,7 +1,6 @@
 import { Body } from "@tauri-apps/api/http";
 import { http } from '../../tauri/api';
 
-const { fetch } = http;
 
 export class ApiClient {
   constructor() {
@@ -51,10 +50,11 @@ export class ApiClient {
     return url;
   }
 
-  callApi(
+  callApi(   
     path, httpMethod, pathParams, queryParams, headerParams,
     formParams, bodyParam, authNames, contentTypes, accepts, returnType) {
-
+    
+    const { fetch } = http;
     const url = this.buildUrl(path, pathParams)
     const urlParams = this.normalizeParams(queryParams);
 

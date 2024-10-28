@@ -1,9 +1,7 @@
-import { useSolaceQueueContext } from "../../hooks/solace";
 
-export default function MessageDetails() {
-  const { activeMessage } = useSolaceQueueContext();
+export default function MessageDetails({ message }) {
 
   return (
-    <pre>{activeMessage?.payload || ''}</pre>
+    <pre>{message?.payload || ''}</pre>
   )
 }

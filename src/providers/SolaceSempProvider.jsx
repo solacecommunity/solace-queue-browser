@@ -13,7 +13,7 @@ export function SolaceSempProvider({ value, children }) {
 export function useSempApi(ApiCtor) {
   const ApiClient = useContext(SolaceSempContext);
   return {
-    build: (opts) => {
+    with: (opts) => {
       const client = new ApiClient();
       const { useTls, hostName, sempPort, sempUsername, sempPassword } = opts;
       Object.assign(client, { 
