@@ -9,10 +9,8 @@ import { Toast } from 'primereact/toast'
 
 import classes from './styles.module.css';
 import { useEffect, useState, useRef } from 'react';
-
-import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
         
-export default function ConfigServerDialog( { config, onHide }) {
+export default function BrokerConfigDialog( { config, brokerEditor, onHide }) {
   const visible = (config !== null);
   const [values, setValues] = useState({});
   const toast = useRef(null);
@@ -34,8 +32,6 @@ export default function ConfigServerDialog( { config, onHide }) {
     });
   }, [config]);
 
-  const { saveBroker, deleteBroker } = useSolaceConfigContext();
-
   const handleInputChange = (evt) => {
     setValues({ ...values, [evt.target.id] : 
       (evt.target.type === 'checkbox') ? 
@@ -45,12 +41,12 @@ export default function ConfigServerDialog( { config, onHide }) {
   };
 
   const handleSave = () => {
-    saveBroker(values);
+    brokerEditor.save(values);
     onHide?.();
   };
 
   const handleDelete = () => {
-    deleteBroker(values);
+    brokerEditor.delete(values);
     onHide?.();
   };
 
@@ -58,11 +54,12 @@ export default function ConfigServerDialog( { config, onHide }) {
     onHide?.();
   }
 
-  const handleTestConnection = () => {
-    toast.current.show({ 
-      severity: 'info',
-      summary: 'Success',
-      detail: 'Connection Succeeded!'
+  const handleTestConnection = async () => {
+    const { severity, summary, detail } = await brokerEditor.test(values);
+    toast.current.show({
+      severity,
+      summary,
+      detail
     });
   }
 

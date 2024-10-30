@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
 import { useSempApi } from '../../providers/SolaceSempProvider';
 import { QueueApi } from '../../utils/solace/semp/monitor';
 
@@ -8,17 +7,16 @@ import { Button } from 'primereact/button';
 import { Tree } from 'primereact/tree';
 import { Toolbar } from 'primereact/toolbar';
 
-import ConfigServerDialog from '../ServerConfigDialog';
+import BrokerConfigDialog from '../BrokerConfigDialog';
 
 import classes from './styles.module.css';
 
-export default function TreeView({ onQueueSelected }) {
+export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   const [ brokerForConfig, setBrokerForConfig ] = useState(null);
   const [ isLoading, setIsLoading ] = useState(false);
 
   const [ queuesListMap, setQueuesListMap ] = useState({});
   
-  const { brokers } = useSolaceConfigContext();
   const queueApi = useSempApi(QueueApi);
 
   const nodes2 = brokers.map(config => ({
@@ -58,7 +56,7 @@ export default function TreeView({ onQueueSelected }) {
     }
   };
 
-  const handleAddBrokerClick = (event) => {
+  const handleAddBrokerClick = () => {
     setBrokerForConfig({});
   };
 
@@ -76,7 +74,7 @@ export default function TreeView({ onQueueSelected }) {
     <div className={classes.container}>
       <Toolbar className={classes.toolbar} start={() => <Button size="small" icon={PrimeIcons.PLUS} onClick={handleAddBrokerClick} />} />
       <Tree value={nodes2} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} />
-      <ConfigServerDialog config={brokerForConfig} onHide={handleConfigHide} />
+      <BrokerConfigDialog config={brokerForConfig} brokerEditor={brokerEditor} onHide={handleConfigHide}  />
     </div>
   );
 }

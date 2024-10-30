@@ -15,13 +15,13 @@ export default function Providers({ children }) {
 
   return (
     <PrimeReactProvider value={primeConfig}>
-      <SolaceConfigProvider source={window.__TAURI__ ? ConfigSource.FS : ConfigSource.LOCAL_STORAGE}>
-        <SolaceSempProvider value={ApiClient}>
+      <SolaceSempProvider value={ApiClient}>
+        <SolaceConfigProvider source={window.__TAURI__ ? ConfigSource.FS : ConfigSource.LOCAL_STORAGE}>
           <SolaceQueueContextProvider>
             {children}
           </SolaceQueueContextProvider>
-        </SolaceSempProvider>
-      </SolaceConfigProvider>
+        </SolaceConfigProvider>
+      </SolaceSempProvider>
     </PrimeReactProvider>
   );
 }

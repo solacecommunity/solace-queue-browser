@@ -78,7 +78,22 @@ export class ApiClient {
       query: urlParams
     }).then(resp => {
       args.response = resp;
-      return resp;
+
+      const { status, data, ...rest } = resp;
+      const result = {
+        status,
+        data,
+        response: {
+          status,
+          body: data,
+          ...rest
+        }
+      };
+
+      if(!resp.ok) {
+        throw result;
+      }
+      return result;
     })
   }
 
