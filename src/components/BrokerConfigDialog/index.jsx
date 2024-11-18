@@ -5,15 +5,15 @@ import { FloatLabel } from 'primereact/floatlabel';
 import { InputText } from 'primereact/inputtext'
 import { Password } from 'primereact/password';
 import { Checkbox } from 'primereact/checkbox';
+import { Toast } from 'primereact/toast'
 
 import classes from './styles.module.css';
-import { useEffect, useState } from 'react';
-
-import { useSolaceConfigContext } from '../../providers/SolaceConfigProvider';
+import { useEffect, useState, useRef } from 'react';
         
-export default function ConfigServerDialog( { config, onHide }) {
+export default function BrokerConfigDialog( { config, brokerEditor, onHide }) {
   const visible = (config !== null);
   const [values, setValues] = useState({});
+  const toast = useRef(null);
 
   useEffect(() => {
     setValues({
@@ -32,8 +32,6 @@ export default function ConfigServerDialog( { config, onHide }) {
     });
   }, [config]);
 
-  const { saveBroker, deleteBroker } = useSolaceConfigContext();
-
   const handleInputChange = (evt) => {
     setValues({ ...values, [evt.target.id] : 
       (evt.target.type === 'checkbox') ? 
@@ -43,17 +41,26 @@ export default function ConfigServerDialog( { config, onHide }) {
   };
 
   const handleSave = () => {
-    saveBroker(values);
+    brokerEditor.save(values);
     onHide?.();
   };
 
   const handleDelete = () => {
-    deleteBroker(values);
+    brokerEditor.delete(values);
     onHide?.();
   };
 
   const handleHide = () => {
     onHide?.();
+  }
+
+  const handleTestConnection = async () => {
+    const { severity, summary, detail } = await brokerEditor.test(values);
+    toast.current.show({
+      severity,
+      summary,
+      detail
+    });
   }
 
   const Header = () => (
@@ -70,20 +77,23 @@ export default function ConfigServerDialog( { config, onHide }) {
           null
       } 
       end={
-        <Button onClick={handleSave}>Save</Button>
+        <>
+          <Button outlined severity="secondary" onClick={handleTestConnection}>Test Connection</Button>
+          <Button onClick={handleSave}>Save</Button>
+        </>
       }
     />
   );
   return (
     <Dialog 
       className={classes.formDialog}
-      appendTo={document.querySelector('main')}
       header={Header}
       footer={Footer}
       maskStyle={{ position: 'absolute', borderRadius: 6 }}
       visible={visible}
       onHide={handleHide}
     >
+      <Toast ref={toast} />
       <form autoComplete="off">
         <FloatLabel className={classes.formField}>
           <InputText id="displayName" className={classes.formInput} value={values.displayName} onChange={handleInputChange} />

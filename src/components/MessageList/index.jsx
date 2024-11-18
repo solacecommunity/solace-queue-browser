@@ -14,9 +14,8 @@ import { useSolaceQueueContext } from "../../hooks/solace";
 import classes from './styles.module.css';
 import { FilterMatchMode } from 'primereact/api';
 
-
-export default function MessageList() {
-  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage, isLoading } = useSolaceQueueContext();
+export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
+  const { getMessages } = useSolaceQueueContext(queueDefinition);
 
   const [ dateTime, setDateTime ] = useState(null);
   const [ fromTime, setFromTime ] = useState(null);
@@ -26,8 +25,18 @@ export default function MessageList() {
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
   });
 
+  const [ isLoading, setIsLoading ] = useState(false);
+  const [ messages, setMessages ] = useState([]);
+
+  const loadMessages = async (from) => {
+    setIsLoading(true);
+    setMessages(await getMessages(from));
+    setIsLoading(false);
+  };
+
   useEffect(() => {
-    getMessages({ fromTime });
+    setMessages([]);
+    loadMessages({ fromTime });
   }, [queueDefinition, fromTime]);
 
   const handleRefreshClick = () => {
@@ -40,15 +49,15 @@ export default function MessageList() {
   };
 
   const handleFirstClick = () => {
-    getMessages({ firstPage: true });
+    loadMessages({ firstPage: true });
   };
 
   const handleNextClick = () => {
-    getMessages({ afterMsg: messages[messages.length - 1].rgmid });
+    loadMessages({ afterMsg: messages[messages.length - 1].rgmid });
   };
 
   const handlePrevClick = () => {
-    getMessages({ prevPage: true });
+    loadMessages({ prevPage: true });
   };
 
   const handleCalendarChange = (e) => {
@@ -57,7 +66,7 @@ export default function MessageList() {
 
   const handleRowSelection = (e) => {
     if(e.value !== null) {
-      setActiveMessage(e.value);
+      onMessageSelect?.(e.value);
     }
   };
 
@@ -71,7 +80,6 @@ export default function MessageList() {
 
   const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
   const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  //const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toString();
   
   const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.spooledTime)});
 
@@ -115,7 +123,7 @@ export default function MessageList() {
             scrollable
             resizableColumns 
             selectionMode="single"
-            selection={activeMessage}
+            selection={selectedMessage}
             dataKey="replicationGroupMsgId"
             onSelectionChange={handleRowSelection}
             globalFilterFields={['payload']}

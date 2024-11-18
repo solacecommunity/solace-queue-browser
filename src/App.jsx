@@ -1,40 +1,50 @@
-// import { createTheme, MantineProvider, DEFAULT_THEME } from '@mantine/core';
+import { useState } from 'react';
 
-import TitleBar from './components/TitleBar';
-import Toolbar from './components/Toolbar';
+import { useSolaceConfigContext } from './providers/SolaceConfigProvider';
+
+import DesktopContainer from './components/DesktopContainer';
 import RootLayout from './components/RootLayout';
-
-import { PrimeReactProvider } from 'primereact/api';
+import TreeView from './components/BrokerQueueTreeView';
+import MessageList from './components/MessageList';
+import MessageDetails from './components/MessageDetails';
 
 import 'primeicons/primeicons.css';
-
 import './App.css';
-import { SolaceConfigProvider } from './providers/SolaceConfigProvider';
-import { SolaceSempProvider } from './providers/SolaceSempProvider';
-import { ApiClient } from './utils/solace/semp';
 
 export default function App() {
+  const [selectedQueue, setSelectedQueue] = useState({});
+  const [selectedMessage, setSelectedMessage] = useState({});
 
-  const primeConfig = {
-    cssTransition: false,
-    ripple: false
+  const { brokers, brokerEditor } = useSolaceConfigContext();
+
+  const handleQueueSelected = (queue) => {
+    setSelectedQueue(queue);
+    setSelectedMessage({});
+  };
+
+  const handleMessageSelect = (message) => {
+    setSelectedMessage(message);
   };
 
   return (
-    <PrimeReactProvider value={primeConfig}>
-      <SolaceConfigProvider>
-        <SolaceSempProvider value={ApiClient}>
-          <header>
-            <TitleBar />
-          </header>
-          <nav>
-            <Toolbar />
-          </nav>
-          <main>
-            <RootLayout />
-          </main>
-        </SolaceSempProvider>
-      </SolaceConfigProvider>
-    </PrimeReactProvider>
+    window.location.pathname === '/desktop' ?
+      <DesktopContainer /> :
+      <>
+        <RootLayout>
+          <RootLayout.LeftPanel>
+            <TreeView brokers={brokers} brokerEditor={brokerEditor} onQueueSelected={handleQueueSelected} />
+          </RootLayout.LeftPanel>
+          <RootLayout.TopPanel>
+            <MessageList 
+              queueDefinition={selectedQueue} 
+              selectedMessage={selectedMessage} 
+              onMessageSelect={handleMessageSelect} 
+            />
+          </RootLayout.TopPanel>
+          <RootLayout.BottomPanel>
+            <MessageDetails message={selectedMessage} />
+          </RootLayout.BottomPanel>
+        </RootLayout>
+      </>
   );
 }

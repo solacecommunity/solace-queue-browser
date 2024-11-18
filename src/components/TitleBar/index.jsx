@@ -17,6 +17,11 @@ export default function TitleBar() {
       const next = isColorSchemeDark() ? 'light' : 'dark';
       window.document.getElementById(`theme-${prev}`).rel = 'prefetch';
       window.document.getElementById(`theme-${next}`).rel = 'stylesheet';
+      const contentFrame = window.document.querySelector('iframe');
+      if(contentFrame) {
+        contentFrame.contentDocument.getElementById(`theme-${prev}`).rel = 'prefetch';
+        contentFrame.contentDocument.getElementById(`theme-${next}`).rel = 'stylesheet';
+      }
       return next;
     });
   };

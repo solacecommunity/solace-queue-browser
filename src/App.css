@@ -9,6 +9,12 @@ body {
   width: 100vw;
 }
 
+iframe {
+  border: none;
+  border-radius: 0px;
+  flex: 1;
+}
+
 #app {
   border: 1px solid var(--surface-border);
   background-color: var(--surface-ground);

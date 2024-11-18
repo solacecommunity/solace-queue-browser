@@ -39,6 +39,7 @@
     "windows": [
       {
         "title": "solace-queue-browser",
+        "url": "desktop",
         "width": 800,
         "height": 600,
         "decorations": false,
