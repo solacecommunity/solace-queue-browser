@@ -91,19 +91,19 @@ export function useSolaceConfigContext() {
 
       if(err.responseCode) switch(err.responseCode) {
         case 401:
-          return { result: false, severity: 'error', summary: 'SMF: Unauthorized', detail: 'Incorrect client username or password.' }
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SMF: Unauthorized', detail: 'Incorrect client username or password.' }};
       }
       
       const errMsg = err.message;
 
       if (errMsg.includes('invalid URL')) {
-        return { result: false, severity: 'error', summary: 'SMF: Failure', detail: 'Invalid broker URL.'}
+        return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SMF: Failure', detail: 'Invalid broker URL.'}};
       }
       if (errMsg.includes('Connection error')) {
-        return { result: false, severity: 'error', summary: 'SMF: Failure', detail: 'General connection error.'}
+        return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SMF: Failure', detail: 'General connection error.'}};
       }
 
-      return { result: false, severity: 'error', summary: 'SMF: Connection Error', detail: 'Unknown error!' };    
+      return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SMF: Connection Error', detail: 'Unknown error!' }};    
     }
 
     const replayLogApi = replayLogApiContext.with(config);
@@ -121,16 +121,16 @@ export function useSolaceConfigContext() {
       switch (status) {
         case 200:
           if (body.data.length > 0) {
-            return { result: true, severity: 'info', summary: 'Success', detail: 'Broker connection succeeded.' };
+            return { result: { connected: true, replay: true}, message: { severity:'info', summary: 'Success', detail: 'Broker connection succeeded.' }};
           } else {
-            return { result: true, severity: 'warn', summary: 'Warning', detail: 'Replay Log not enabled on broker.' }
+            return { result: { connected: true, replay: false}, message: { severity:'warn', summary: 'Warning', detail: 'Replay Log not enabled on broker.' }};
           }
         case 400:
-          return { result: false, severity: 'error', summary: 'SEMP: Bad Request', detail: errorDetail };
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Bad Request', detail: errorDetail }};
         case 401:
-          return { result: false, severity: 'error', summary: 'SEMP: Unauthorized', detail: errorDetail };
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Unauthorized', detail: errorDetail }};
         case 403:
-          return { result: false, severity: 'error', summary: 'SEMP: Forbidden', detail: errorDetail };
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Forbidden', detail: errorDetail }};
       }
     };
 
@@ -148,17 +148,17 @@ export function useSolaceConfigContext() {
           errMsg.includes('Invalid URL') ||
           errMsg.includes('expected empty host')
         ) {
-          return { result: false, severity: 'error', summary: 'SEMP: Failure', detail: 'Invalid broker URL.' };
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Failure', detail: 'Invalid broker URL.' }};
         }
         
         if (
           errMsg.includes('Network Error') ||
           errMsg.includes('Request has been terminated')
         ) {
-          return { result: false, severity: 'error', summary: 'SEMP: Failure', detail: 'Broker service unreachable.' }
+          return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Failure', detail: 'Broker service unreachable.' }}
         }
       }
-      return { result: false, severity: 'error', summary: 'SEMP: Failure', detail: 'Unknown error!' };
+      return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SEMP: Failure', detail: 'Unknown error!' }};
     }
   };
 

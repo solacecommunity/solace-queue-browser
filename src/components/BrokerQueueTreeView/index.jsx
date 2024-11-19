@@ -19,6 +19,27 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   
   const queueApi = useSempApi(QueueApi);
 
+  const getBrokerIcon = (testResult) => (
+    testResult ? (
+      testResult.connected ? (
+        testResult.replay ?
+          'pi pi-circle-fill text-primary' :
+          'pi pi-circle text-primary'
+      ) :
+        'pi pi-times-circle text-red-500'
+    ) : 'pi pi-question-circle'
+  );
+
+  const getQueueIcon = (queue) => {
+    const isLvq = queue.maxMsgSpoolUsage === 0;
+    const isEmpty = queue.msgSpoolUsage === 0;
+    const isFull = (queue.msgSpoolUsage/queue.maxMsgSpoolUsage) > queue.eventMsgSpoolUsageThreshold.setPercent;
+
+    const iconType = isLvq ? 'pi-caret-right' : 'pi-forward';
+    const iconColor = isEmpty ? '' : (!isLvq && isFull) ? 'text-red-500' : 'text-primary';
+    return `pi ${iconType} ${iconColor}`;
+  };
+
   const nodes2 = brokers.map(config => ({
     id: config.id,
     key: config.id,
@@ -27,6 +48,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
       type: 'broker',
       config
     },
+    icon: getBrokerIcon(config.testResult),
     leaf: false,
     children: queuesListMap[config.id] || []
   }));
@@ -34,18 +56,28 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   const handleExpand = async (event) => {
     setIsLoading(true);
     const { config } = event.node.data;
-    const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
-    const queueNodeList = queues
-      .filter((queue) => !queue.queueName.startsWith('#'))
-      .map((queue, n) => ({
-        id: `${config.id}-${n}`,
-        key: n.toString(),
-        label: queue.queueName,
-        data: {
-          type: 'queue',
-          config: Object.assign({}, config, { queueName: queue.queueName })
-        }
-      }));
+
+    const { result } = await brokerEditor.test(config);
+    Object.assign(config, { testResult: result }); //HACK: this updates the during each expansion
+
+    let queueNodeList = [];
+    if(result.connected) {
+      const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
+      console.dir(queues);
+      queueNodeList = queues
+        .filter((queue) => !queue.queueName.startsWith('#'))
+        .map((queue, n) => ({
+          id: `${config.id}-${n}`,
+          key: n.toString(),
+          label: queue.queueName,
+          data: {
+            type: 'queue',
+            config: Object.assign({}, config, { queueName: queue.queueName })
+          },
+          icon: getQueueIcon(queue)
+        }));
+    }
+
     setQueuesListMap(prev => ({...prev, [config.id]: queueNodeList}));
     setIsLoading(false);
   };
