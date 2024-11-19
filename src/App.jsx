@@ -8,6 +8,7 @@ import TreeView from './components/BrokerQueueTreeView';
 import MessageList from './components/MessageList';
 import MessageDetails from './components/MessageDetails';
 
+import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
 import './App.css';
 

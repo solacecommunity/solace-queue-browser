@@ -55,12 +55,8 @@ export default function BrokerConfigDialog( { config, brokerEditor, onHide }) {
   }
 
   const handleTestConnection = async () => {
-    const { severity, summary, detail } = await brokerEditor.test(values);
-    toast.current.show({
-      severity,
-      summary,
-      detail
-    });
+    const { message } = await brokerEditor.test(values);
+    toast.current.show(message);
   }
 
   const Header = () => (
