@@ -40,7 +40,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
     return `pi ${iconType} ${iconColor}`;
   };
 
-  const nodes2 = brokers.map(config => ({
+  const nodes = brokers.map(config => ({
     id: config.id,
     key: config.id,
     label: config.displayName,
@@ -105,7 +105,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   return (
     <div className={classes.container}>
       <Toolbar className={classes.toolbar} start={() => <Button size="small" icon={PrimeIcons.PLUS} onClick={handleAddBrokerClick} />} />
-      <Tree value={nodes2} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} />
+      <Tree value={nodes} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} pt={{ container: { className: classes.treeContainer } }} />
       <BrokerConfigDialog config={brokerForConfig} brokerEditor={brokerEditor} onHide={handleConfigHide}  />
     </div>
   );
