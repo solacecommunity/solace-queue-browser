@@ -28,15 +28,15 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   const [ isLoading, setIsLoading ] = useState(false);
   const [ messages, setMessages ] = useState([]);
 
-  const loadMessages = async (from) => {
+  const loadMessages = async (loader) => {
     setIsLoading(true);
-    setMessages(await getMessages(from));
+    setMessages(await loader());
     setIsLoading(false);
   };
 
   useEffect(() => {
     setMessages([]);
-    loadMessages({ fromTime });
+    loadMessages(() => getMessages({ fromTime }));
   }, [queueDefinition, fromTime]);
 
   const handleRefreshClick = () => {
@@ -49,15 +49,15 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   };
 
   const handleFirstClick = () => {
-    loadMessages({ firstPage: true });
+    loadMessages(() => getMessages({ firstPage: true }));
   };
 
   const handleNextClick = () => {
-    loadMessages({ afterMsg: messages[messages.length - 1].rgmid });
+    loadMessages(() => getMessages({ afterMsg: messages[messages.length - 1].rgmid }));
   };
 
   const handlePrevClick = () => {
-    loadMessages({ prevPage: true });
+    loadMessages(() => getMessages({ prevPage: true }));
   };
 
   const handleCalendarChange = (e) => {
