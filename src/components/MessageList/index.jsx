@@ -9,13 +9,13 @@ import { InputText } from 'primereact/inputtext';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 
-import { useSolaceQueueContext } from "../../hooks/solace";
+import { useQueueBrowser } from "../../hooks/solace";
 
 import classes from './styles.module.css';
 import { FilterMatchMode } from 'primereact/api';
 
 export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
-  const { getMessages } = useSolaceQueueContext(queueDefinition);
+  const { getMessages } = useQueueBrowser(queueDefinition);
 
   const [ dateTime, setDateTime ] = useState(null);
   const [ fromTime, setFromTime ] = useState(null);

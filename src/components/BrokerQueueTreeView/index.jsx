@@ -63,7 +63,6 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
     let queueNodeList = [];
     if(result.connected) {
       const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
-      console.dir(queues);
       queueNodeList = queues
         .filter((queue) => !queue.queueName.startsWith('#'))
         .map((queue, n) => ({
