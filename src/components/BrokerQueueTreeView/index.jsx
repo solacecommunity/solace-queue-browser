@@ -104,7 +104,9 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   return (
     <div className={classes.container}>
       <Toolbar className={classes.toolbar} start={() => <Button size="small" icon={PrimeIcons.PLUS} onClick={handleAddBrokerClick} />} />
-      <Tree value={nodes} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} pt={{ container: { className: classes.treeContainer } }} />
+      <Tree value={nodes} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} 
+        pt={{ container: { className: classes.treeContainer }, label: { className: classes.treeNodeLabel } }} 
+      />
       <BrokerConfigDialog config={brokerForConfig} brokerEditor={brokerEditor} onHide={handleConfigHide}  />
     </div>
   );

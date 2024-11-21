@@ -4,9 +4,16 @@ import { QueueApi as QueueMonitorApi, ReplayLogApi } from "../utils/solace/semp/
 
 import { useSempApi } from "../providers/SolaceSempProvider";
 
+export function useQueueBrowser(queueDefinition, startFrom) {
+  const {
+    hostName, clientPort, useTls,
+    vpn, queueName,
+    clientUsername, clientPassword,
+  } = queueDefinition;
 
-export function useQueueBrowser(queueDefinition) {
   const [replayPages, setReplayPages] = useState([]);
+  const [lastRgmid, setLastRgmid] = useState();
+  const [endOfQueue, setEndOfQueue] = useState();
 
   const queueMonitorApi = useSempApi(QueueMonitorApi).with(queueDefinition);
   const replayLogMonitorApi = useSempApi(ReplayLogApi).with(queueDefinition);
@@ -14,26 +21,47 @@ export function useQueueBrowser(queueDefinition) {
   useEffect(() => {
     replayPages.length = 0;
     setReplayPages([]);
+    setLastRgmid();
+    setEndOfQueue();
   }, [queueDefinition]);
 
-  const getMessages = async ({ count = 50, fromTime, afterMsg, prevPage, firstPage } = {}) => {
+  const getQueueReplayFrom = async ({ lowestMsgId }) => {
+    try {
+      const replayLogs = await replayLogMonitorApi.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
+      const { replayLogName } = replayLogs.data[0];
+
+      const prevMessages = await replayLogMonitorApi.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
+        cursor: [
+          `<rpc><show><replay-log>`,
+          `<name>${replayLogName}</name>`,
+          `<vpn-name>${vpn}</vpn-name>`,
+          `<messages/><newest/>`,
+          `<msg-id>${lowestMsgId}</msg-id>`,
+          `<detail/>`,
+          `<num-elements>2</num-elements>`,
+          `</replay-log></show></rpc>`,
+        ].join(''),
+        select: ['replicationGroupMsgId'],
+        count: 2
+      });
+
+      return { afterMsg: prevMessages.data[1].replicationGroupMsgId };
+    } catch (ex) {
+      console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning.', ex);
+      return {};
+    }
+  };
+  
+  const getMessages = async ({ count = 50, replayFrom = startFrom } = {}) => {
     if (!queueDefinition.queueName) {
       return [];
     }
+    
+    const timeStart = () => console.time('getMessages');
+    const timeLog = (message) => console.timeLog('getMessages', message);
+    const timeEnd = () => console.timeEnd('getMessages');
 
-    const {
-      hostName, clientPort, useTls,
-      vpn, queueName,
-      clientUsername, clientPassword,
-    } = queueDefinition;
-
-    const timeLog = (() => {
-      const startTime = Date.now();
-      return (message) => {
-        console.log(`${(Date.now() - startTime).toString().padStart(6, '0')}: ${message}`);
-      };
-    })();
-
+    timeStart();
     timeLog('starting browser');
 
     const session = solace.SolclientFactory.createAsyncSession({
@@ -43,59 +71,17 @@ export function useQueueBrowser(queueDefinition) {
       password: clientPassword
     });
 
-    const [queue, subscriptions] = await Promise.all([
-      queueMonitorApi.getMsgVpnQueue(vpn, queueName, { select: ['lowestMsgId'] }),
+    const [{ data: queue }, { data: subscriptions }] = await Promise.all([
+      queueMonitorApi.getMsgVpnQueue(vpn, queueName),
       queueMonitorApi.getMsgVpnQueueSubscriptions(vpn, queueName),
       session.connect()
     ]);
 
-    let replayFrom;
-    if (prevPage) {
-      replayPages.pop();
-      replayFrom = replayPages[replayPages.length - 1] || {};
-    } else if (firstPage) {
-      replayFrom = replayPages[0] || {};
-      replayPages.length = 0;
-      replayPages.push(replayFrom);
-    } else if (fromTime) {
-      replayFrom = { fromTime };
-      replayPages.length = 0;
-      replayPages.push(replayFrom);
-    } else if (afterMsg) {
-      replayFrom = { afterMsg };
-      replayPages.push(replayFrom);
-    } else if (queue.data.lowestMsgId) {
+    if (!replayFrom && queue.lowestMsgId) {
       // check if lowestMsgId is on the replay log at all
-      try {
-        const replayLogs = await replayLogMonitorApi.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-        const { replayLogName } = replayLogs.data[0];
-
-        const prevMessages = await replayLogMonitorApi.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${replayLogName}</name>`,
-            `<vpn-name>${vpn}</vpn-name>`,
-            `<messages/><newest/>`,
-            `<msg-id>${queue.data.lowestMsgId}</msg-id>`,
-            `<detail/>`,
-            `<num-elements>2</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['replicationGroupMsgId'],
-          count: 2
-        });
-
-        replayFrom = { afterMsg: prevMessages.data[1].replicationGroupMsgId };
-        replayPages.push(replayFrom);
-      } catch (ex) {
-        console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning.');
-        replayFrom = {};
-        replayPages.push(replayFrom);
-      }
-    } else {
-      // No messages on source queue, will skip replay
-      replayFrom = null;
+      replayFrom = await getQueueReplayFrom(queue);
     }
+    replayPages.push(replayFrom);
 
     timeLog('connected to broker');
 
@@ -125,7 +111,7 @@ export function useQueueBrowser(queueDefinition) {
         queueTopic,
         2000
       ),
-      ...subscriptions.data.map(s => (
+      ...subscriptions.map(s => (
         messageConsumer.addSubscription(
           solace.SolclientFactory.createTopicDestination(s.subscriptionTopic),
           s.subscriptionTopic,
@@ -142,17 +128,20 @@ export function useQueueBrowser(queueDefinition) {
     const messages = await queueBrowser.readMessages(count, 500);
 
     timeLog('getting metadata');
-    const msgMetaData = await queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
+    const { data: msgMetaData } = await queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
 
     timeLog('disconnecting browser');
     queueBrowser.disconnect();
     session.deprovisionEndpoint(queueDescriptor);
     session.disconnect();
-
-    setReplayPages([...replayPages]);
     
+    timeEnd();
+    setReplayPages([...replayPages]);
+    setLastRgmid(messages[messages.length - 1]?.getReplicationGroupMessageId().toString());
+    setEndOfQueue(msgMetaData[msgMetaData.length - 1]?.msgId >= queue.highestMsgId);
+
     return messages.map((msg, n) => ({
-      ...(msgMetaData.data[n]),
+      ...(msgMetaData[n]),
       payload: msg.getBinaryAttachment().toString(),
       size: msg.getBinaryAttachment().length,
       rgmid: msg.getReplicationGroupMessageId().toString(),
@@ -160,7 +149,34 @@ export function useQueueBrowser(queueDefinition) {
     }));
   };
 
+  const getFirstPage = () => {
+    replayPages.length = 0;
+    return getMessages();
+  };
+
+  const getNextPage = () => {
+    return getMessages({ replayFrom: { afterMsg: lastRgmid } });
+  };
+
+  const getPrevPage = () => {
+    replayPages.pop();
+    return getMessages({ replayFrom: replayPages.pop() });
+  };
+
+  const hasNextPage = () => {
+    return !endOfQueue;
+  };
+
+  const hasPrevPage = () => {
+    return replayPages.length > 1;
+  };
+
   return {
     getMessages,
+    getFirstPage,
+    getNextPage,
+    getPrevPage,
+    hasNextPage,
+    hasPrevPage
   };
 };

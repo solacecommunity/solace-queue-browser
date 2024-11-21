@@ -208,6 +208,12 @@ export class ApiClient {
         return newParams;
     }
 
+    flattenParams(params) {
+      return Object.entries(params || {})
+        .filter(([key, value]) => value)
+        .map(([key, value]) => `${key}=${value}`);
+    }
+
     /**
     * Enumeration of collection format separator strategies.
     * @enum {String}

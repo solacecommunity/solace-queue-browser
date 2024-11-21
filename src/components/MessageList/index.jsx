@@ -15,10 +15,11 @@ import classes from './styles.module.css';
 import { FilterMatchMode } from 'primereact/api';
 
 export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
-  const { getMessages } = useQueueBrowser(queueDefinition);
-
+  
   const [ dateTime, setDateTime ] = useState(null);
   const [ fromTime, setFromTime ] = useState(null);
+
+  const browser = useQueueBrowser(queueDefinition, fromTime ? { fromTime } : null); //HACK: ternary should not be needed
 
   const [ globalFilterValue, setGlobalFilterValue ] = useState('');
   const [ filters, setFilters] = useState({
@@ -36,7 +37,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
 
   useEffect(() => {
     setMessages([]);
-    loadMessages(() => getMessages({ fromTime }));
+    loadMessages(() => browser.getFirstPage());
   }, [queueDefinition, fromTime]);
 
   const handleRefreshClick = () => {
@@ -49,15 +50,15 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   };
 
   const handleFirstClick = () => {
-    loadMessages(() => getMessages({ firstPage: true }));
+    loadMessages(() => browser.getFirstPage());
   };
 
   const handleNextClick = () => {
-    loadMessages(() => getMessages({ afterMsg: messages[messages.length - 1].rgmid }));
+    loadMessages(() => browser.getNextPage());
   };
 
   const handlePrevClick = () => {
-    loadMessages(() => getMessages({ prevPage: true }));
+    loadMessages(() => browser.getPrevPage());
   };
 
   const handleCalendarChange = (e) => {
@@ -98,8 +99,8 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     return (
       <div>
         <Button text onClick={handleFirstClick}>First</Button>
-        <Button text onClick={handlePrevClick}>&lt; Prev</Button>
-        <Button text onClick={handleNextClick}>Next &gt;</Button>
+        <Button text onClick={handlePrevClick} disabled={!browser.hasPrevPage()}>&lt; Prev</Button>
+        <Button text onClick={handleNextClick} disabled={!browser.hasNextPage()}>Next &gt;</Button>
       </div>
     );
   };
