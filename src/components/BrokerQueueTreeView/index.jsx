@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useSempApi } from '../../providers/SolaceSempProvider';
-import { QueueApi } from '../../utils/solace/semp/monitor';
+import { useSempApi } from '../../providers/SempClientProvider';
 
 import { PrimeIcons } from 'primereact/api';
 import { Button } from 'primereact/button';
@@ -17,7 +16,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
 
   const [ queuesListMap, setQueuesListMap ] = useState({});
   
-  const queueApi = useSempApi(QueueApi);
+  const sempApi = useSempApi();
 
   const getBrokerIcon = (testResult) => (
     testResult ? (
@@ -62,7 +61,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
 
     let queueNodeList = [];
     if(result.connected) {
-      const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
+      const { data: queues } = await sempApi.getClient(config).getMsgVpnQueues(config.vpn, { count: 100 });
       queueNodeList = queues
         .filter((queue) => !queue.queueName.startsWith('#'))
         .map((queue, n) => ({

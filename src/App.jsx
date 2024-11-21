@@ -1,6 +1,6 @@
 import { useState } from 'react';
 
-import { useSolaceConfigContext } from './providers/SolaceConfigProvider';
+import { useBrokerConfig } from './providers/BrokerConfigProvider';
 
 import DesktopContainer from './components/DesktopContainer';
 import RootLayout from './components/RootLayout';
@@ -16,7 +16,7 @@ export default function App() {
   const [selectedQueue, setSelectedQueue] = useState({});
   const [selectedMessage, setSelectedMessage] = useState({});
 
-  const { brokers, brokerEditor } = useSolaceConfigContext();
+  const { brokers, brokerEditor } = useBrokerConfig();
 
   const handleQueueSelected = (queue) => {
     setSelectedQueue(queue);

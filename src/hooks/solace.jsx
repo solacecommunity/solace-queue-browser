@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import solace from '../utils/solace/solclientasync';
-import { QueueApi as QueueMonitorApi, ReplayLogApi } from "../utils/solace/semp/monitor";
 
-import { useSempApi } from "../providers/SolaceSempProvider";
+import { useSempApi } from "../providers/SempClientProvider";
 
 export function useQueueBrowser(queueDefinition, startFrom) {
   const {
@@ -15,8 +14,7 @@ export function useQueueBrowser(queueDefinition, startFrom) {
   const [lastRgmid, setLastRgmid] = useState();
   const [endOfQueue, setEndOfQueue] = useState();
 
-  const queueMonitorApi = useSempApi(QueueMonitorApi).with(queueDefinition);
-  const replayLogMonitorApi = useSempApi(ReplayLogApi).with(queueDefinition);
+  const sempClient = useSempApi().getClient(queueDefinition);
 
   useEffect(() => {
     replayPages.length = 0;
@@ -27,10 +25,10 @@ export function useQueueBrowser(queueDefinition, startFrom) {
 
   const getQueueReplayFrom = async ({ lowestMsgId }) => {
     try {
-      const replayLogs = await replayLogMonitorApi.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
+      const replayLogs = await sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
       const { replayLogName } = replayLogs.data[0];
 
-      const prevMessages = await replayLogMonitorApi.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
+      const prevMessages = await sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
         cursor: [
           `<rpc><show><replay-log>`,
           `<name>${replayLogName}</name>`,
@@ -72,8 +70,8 @@ export function useQueueBrowser(queueDefinition, startFrom) {
     });
 
     const [{ data: queue }, { data: subscriptions }] = await Promise.all([
-      queueMonitorApi.getMsgVpnQueue(vpn, queueName),
-      queueMonitorApi.getMsgVpnQueueSubscriptions(vpn, queueName),
+      sempClient.getMsgVpnQueue(vpn, queueName),
+      sempClient.getMsgVpnQueueSubscriptions(vpn, queueName),
       session.connect()
     ]);
 
@@ -128,7 +126,7 @@ export function useQueueBrowser(queueDefinition, startFrom) {
     const messages = await queueBrowser.readMessages(count, 500);
 
     timeLog('getting metadata');
-    const { data: msgMetaData } = await queueMonitorApi.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
+    const { data: msgMetaData } = await sempClient.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
 
     timeLog('disconnecting browser');
     queueBrowser.disconnect();
