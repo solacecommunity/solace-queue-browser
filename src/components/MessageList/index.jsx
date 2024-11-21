@@ -17,9 +17,9 @@ import { FilterMatchMode } from 'primereact/api';
 export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
   
   const [ dateTime, setDateTime ] = useState(null);
-  const [ fromTime, setFromTime ] = useState(null);
+  const [ startFrom, setStartFrom ] = useState(null);
 
-  const browser = useQueueBrowser(queueDefinition, fromTime ? { fromTime } : null); //HACK: ternary should not be needed
+  const browser = useQueueBrowser(queueDefinition, startFrom);
 
   const [ globalFilterValue, setGlobalFilterValue ] = useState('');
   const [ filters, setFilters] = useState({
@@ -38,14 +38,14 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   useEffect(() => {
     setMessages([]);
     loadMessages(() => browser.getFirstPage());
-  }, [queueDefinition, fromTime]);
+  }, [browser]);
 
   const handleRefreshClick = () => {
     try {
-      setFromTime(Math.floor(Date.parse(dateTime) / 1000));
+      setStartFrom(dateTime ? { fromTime: Math.floor(Date.parse(dateTime) / 1000) } : null);
     } catch {
       console.error('Invalid date format');
-      setFromTime(null);
+      setStartFrom(null);
     }
   };
 
