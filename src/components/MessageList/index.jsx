@@ -9,46 +9,78 @@ import { InputText } from 'primereact/inputtext';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
 
-import { useSolaceQueueContext } from "../../hooks/solace";
+import { useQueueBrowser } from "../../hooks/solace";
 
 import classes from './styles.module.css';
 import { FilterMatchMode } from 'primereact/api';
+import { Dropdown } from 'primereact/dropdown';
 
+export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
+  const browseModes = [
+    { value: 'head', name: 'Queue Head' },
+    { value: 'time', name: 'Date / Time' },
+    { value: 'tail', name: 'Queue End' } 
+  ];
 
-export default function MessageList() {
-  const { queueDefinition, getMessages, messages, activeMessage, setActiveMessage, isLoading } = useSolaceQueueContext();
-
+  const [ browseMode, setBrowseMode ] = useState(browseModes[0].value);
   const [ dateTime, setDateTime ] = useState(null);
-  const [ fromTime, setFromTime ] = useState(null);
+  const [ startFrom, setStartFrom ] = useState(null);
+
+  const browser = useQueueBrowser(queueDefinition, startFrom);
 
   const [ globalFilterValue, setGlobalFilterValue ] = useState('');
   const [ filters, setFilters] = useState({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
   });
 
-  useEffect(() => {
-    getMessages({ fromTime });
-  }, [queueDefinition, fromTime]);
+  const [ isLoading, setIsLoading ] = useState(false);
+  const [ messages, setMessages ] = useState([]);
 
+  const loadMessages = async (loader) => {
+    setIsLoading(true);
+    setMessages(await loader());
+    setIsLoading(false);
+  };
+
+  useEffect(() => {
+    setMessages([]);
+    loadMessages(() => browser.getFirstPage());
+  }, [browser]);
+
+  const handleBrowseModeChange = (evt) => {
+    setBrowseMode(evt.value);
+    switch(evt.value) {
+      case 'head':
+        setDateTime(null);
+        setStartFrom(null);
+        break;
+      case 'time':
+        break;
+      case 'tail':
+        setDateTime(null);
+        setStartFrom({ tail: true });
+        break;
+    }
+  };
   const handleRefreshClick = () => {
     try {
-      setFromTime(Math.floor(Date.parse(dateTime) / 1000));
+      setStartFrom(dateTime ? { fromTime: Math.floor(Date.parse(dateTime) / 1000) } : null);
     } catch {
       console.error('Invalid date format');
-      setFromTime(null);
+      setStartFrom(null);
     }
   };
 
   const handleFirstClick = () => {
-    getMessages({ firstPage: true });
+    loadMessages(() => browser.getFirstPage());
   };
 
   const handleNextClick = () => {
-    getMessages({ afterMsg: messages[messages.length - 1].rgmid });
+    loadMessages(() => browser.getNextPage());
   };
 
   const handlePrevClick = () => {
-    getMessages({ prevPage: true });
+    loadMessages(() => browser.getPrevPage());
   };
 
   const handleCalendarChange = (e) => {
@@ -57,13 +89,12 @@ export default function MessageList() {
 
   const handleRowSelection = (e) => {
     if(e.value !== null) {
-      setActiveMessage(e.value);
+      onMessageSelect?.(e.value);
     }
   };
 
   const handleFilterChange = (e) => {
     const value = e.target.value;
-    console.log('filters', filters);
     setFilters({ global: { ...filters.global, value}});
     setGlobalFilterValue(value);
 };
@@ -71,7 +102,6 @@ export default function MessageList() {
 
   const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
   const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  //const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toString();
   
   const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.spooledTime)});
 
@@ -90,8 +120,8 @@ export default function MessageList() {
     return (
       <div>
         <Button text onClick={handleFirstClick}>First</Button>
-        <Button text onClick={handlePrevClick}>&lt; Prev</Button>
-        <Button text onClick={handleNextClick}>Next &gt;</Button>
+        <Button text onClick={handlePrevClick} disabled={!browser.hasPrevPage()}>&lt; Prev</Button>
+        <Button text onClick={handleNextClick} disabled={!browser.hasNextPage()}>Next &gt;</Button>
       </div>
     );
   };
@@ -101,11 +131,13 @@ export default function MessageList() {
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%'}}>
         <Toolbar className={classes.messageListToolbar}
           start={() => <h3>Queue | {queueDefinition?.queueName}</h3>}
-          end={() => <>
-            <label>From: &nbsp;</label>
-            <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" />
-            <Button onClick={handleRefreshClick} size="small">Refresh</Button>
-          </>}
+          end={() =>
+            <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+              <label>From:</label>
+              <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
+              <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" disabled={browseMode != 'time'} />
+              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
+            </div>}
         />
         <div style={{ flex: '1', overflow: 'hidden'}}>
           <DataTable
@@ -115,7 +147,7 @@ export default function MessageList() {
             scrollable
             resizableColumns 
             selectionMode="single"
-            selection={activeMessage}
+            selection={selectedMessage}
             dataKey="replicationGroupMsgId"
             onSelectionChange={handleRowSelection}
             globalFilterFields={['payload']}

@@ -42,8 +42,9 @@ function createAsyncSession(sessionProperties) {
   } = session;
 
   function connectAsync() {
-    return new Promise((onUpNotice) => {
+    return new Promise((onUpNotice, onConnectFailed) => {
       session.once(solace.SessionEventCode.UP_NOTICE, onUpNotice);
+      session.once(solace.SessionEventCode.CONNECT_FAILED_ERROR, onConnectFailed);
       connect.call(session);
     });
   }
