@@ -21,3 +21,7 @@
 .treeContainer {
   overflow-x: hidden;
 }
+
+.treeNodeLabel {
+  white-space: nowrap;
+}

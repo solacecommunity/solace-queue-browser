@@ -1,6 +1,5 @@
 import { useState } from 'react';
-import { useSempApi } from '../../providers/SolaceSempProvider';
-import { QueueApi } from '../../utils/solace/semp/monitor';
+import { useSempApi } from '../../providers/SempClientProvider';
 
 import { PrimeIcons } from 'primereact/api';
 import { Button } from 'primereact/button';
@@ -17,7 +16,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
 
   const [ queuesListMap, setQueuesListMap ] = useState({});
   
-  const queueApi = useSempApi(QueueApi);
+  const sempApi = useSempApi();
 
   const getBrokerIcon = (testResult) => (
     testResult ? (
@@ -62,8 +61,7 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
 
     let queueNodeList = [];
     if(result.connected) {
-      const queues = (await queueApi.with(config).getMsgVpnQueues(config.vpn, { count: 100 })).data;
-      console.dir(queues);
+      const { data: queues } = await sempApi.getClient(config).getMsgVpnQueues(config.vpn, { count: 100 });
       queueNodeList = queues
         .filter((queue) => !queue.queueName.startsWith('#'))
         .map((queue, n) => ({
@@ -105,7 +103,9 @@ export default function TreeView({ brokers, brokerEditor, onQueueSelected }) {
   return (
     <div className={classes.container}>
       <Toolbar className={classes.toolbar} start={() => <Button size="small" icon={PrimeIcons.PLUS} onClick={handleAddBrokerClick} />} />
-      <Tree value={nodes} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} pt={{ container: { className: classes.treeContainer } }} />
+      <Tree value={nodes} className={classes.tree} onExpand={handleExpand} onSelect={handleSelect} onNodeDoubleClick={handleDoubleClick} selectionMode="single" loading={isLoading} 
+        pt={{ container: { className: classes.treeContainer }, label: { className: classes.treeNodeLabel } }} 
+      />
       <BrokerConfigDialog config={brokerForConfig} brokerEditor={brokerEditor} onHide={handleConfigHide}  />
     </div>
   );

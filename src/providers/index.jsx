@@ -1,11 +1,11 @@
 import { PrimeReactProvider } from 'primereact/api';
 
-import { SolaceConfigProvider, ConfigSource } from './SolaceConfigProvider';
-import { SolaceSempProvider } from './SolaceSempProvider';
-import { SolaceQueueContextProvider } from '../hooks/solace';
+import { BrokerConfigProvider, ConfigSource } from './BrokerConfigProvider';
+import { SempClientProvider } from './SempClientProvider';
 
-import { ApiClient } from '../utils/solace/semp';
+import { TauriClient, FetchClient } from '../utils/solace/semp';
 
+const TAURI_APP = window.__TAURI__ ? true : false;
 
 export default function Providers({ children }) {
   const primeConfig = {
@@ -15,13 +15,11 @@ export default function Providers({ children }) {
 
   return (
     <PrimeReactProvider value={primeConfig}>
-      <SolaceSempProvider value={ApiClient}>
-        <SolaceConfigProvider source={window.__TAURI__ ? ConfigSource.FS : ConfigSource.LOCAL_STORAGE}>
-          <SolaceQueueContextProvider>
-            {children}
-          </SolaceQueueContextProvider>
-        </SolaceConfigProvider>
-      </SolaceSempProvider>
+      <SempClientProvider value={TAURI_APP ? TauriClient : FetchClient}>
+        <BrokerConfigProvider source={TAURI_APP ? ConfigSource.FS : ConfigSource.LOCAL_STORAGE}>
+          {children}
+        </BrokerConfigProvider>
+      </SempClientProvider>
     </PrimeReactProvider>
   );
 }

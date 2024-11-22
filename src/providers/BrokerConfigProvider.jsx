@@ -2,11 +2,10 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { BaseDirectory } from "@tauri-apps/api/fs";
 import { fs } from '../utils/tauri/api';
 
-import { useSempApi } from "./SolaceSempProvider";
-import { ReplayLogApi } from "../utils/solace/semp/monitor";
+import { useSempApi } from "./SempClientProvider";
 import solace from '../utils/solace/solclientasync';
 
-const SolaceConfigContext = createContext();
+const BrokerConfigContext = createContext();
 
 export const ConfigSource = {
   FS: {
@@ -35,18 +34,18 @@ export const ConfigSource = {
   }
 }
 
-export function SolaceConfigProvider({ source, children }) {
+export function BrokerConfigProvider({ source, children }) {
   const [brokers, setBrokers] = useState([]);
   return (
-    <SolaceConfigContext.Provider value={{ source, brokers, setBrokers }}>
+    <BrokerConfigContext.Provider value={{ source, brokers, setBrokers }}>
       {children}
-    </SolaceConfigContext.Provider>
+    </BrokerConfigContext.Provider>
   )
 }
 
-export function useSolaceConfigContext() {
-  const { source, brokers, setBrokers } = useContext(SolaceConfigContext);
-  const replayLogApiContext = useSempApi(ReplayLogApi);
+export function useBrokerConfig() {
+  const { source, brokers, setBrokers } = useContext(BrokerConfigContext);
+  const sempApi = useSempApi();
 
   useEffect(() => {
     source.readConfig().then(brokers => setBrokers(brokers));
@@ -106,7 +105,7 @@ export function useSolaceConfigContext() {
       return { result: { connected: false, replay: false}, message: { severity:'error', summary: 'SMF: Connection Error', detail: 'Unknown error!' }};    
     }
 
-    const replayLogApi = replayLogApiContext.with(config);
+    const sempClient = sempApi.getClient(config);
 
     const handleResponse = ({status, body}) => {
       const errorDetail = (
@@ -135,7 +134,7 @@ export function useSolaceConfigContext() {
     };
 
     try {
-      const { response } = await replayLogApi.getMsgVpnReplayLogsWithHttpInfo(vpn, { select: ['replayLogName'] });
+      const { response } = await sempClient.getMsgVpnReplayLogsWithHttpInfo(vpn, { select: ['replayLogName'] });
       return handleResponse(response);
     } catch (err) {
       if(err.status && err.response) {

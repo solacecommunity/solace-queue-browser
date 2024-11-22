@@ -69,6 +69,7 @@ export class ApiClient {
     console.trace(`${httpMethod} ${url}`, args);
     const { username, password } = this.authentications.basicAuth;
 
+    //BUG: Tauri http fetch incorrectly URLEncodes commas in query
     return fetch(url, {
       method: httpMethod,
       headers: {
@@ -107,6 +108,16 @@ export class ApiClient {
     }
 
     return newParams;
+  }
+
+  flattenParams(params) {
+    return Object.entries(params || {})
+      .filter(([key, value]) => value)
+      .map(([key, value]) => `${key}=${value}`);
+  }
+
+  paramsToString(params) {
+    return this.flattenParams(this.normalizeParams(params)).join('&');
   }
 
   paramToString(param) {
