@@ -13,9 +13,16 @@ import { useQueueBrowser } from "../../hooks/solace";
 
 import classes from './styles.module.css';
 import { FilterMatchMode } from 'primereact/api';
+import { Dropdown } from 'primereact/dropdown';
 
 export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
-  
+  const browseModes = [
+    { value: 'head', name: 'Queue Head' },
+    { value: 'time', name: 'Date / Time' },
+    { value: 'tail', name: 'Queue End' } 
+  ];
+
+  const [ browseMode, setBrowseMode ] = useState(browseModes[0].value);
   const [ dateTime, setDateTime ] = useState(null);
   const [ startFrom, setStartFrom ] = useState(null);
 
@@ -40,6 +47,21 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     loadMessages(() => browser.getFirstPage());
   }, [browser]);
 
+  const handleBrowseModeChange = (evt) => {
+    setBrowseMode(evt.value);
+    switch(evt.value) {
+      case 'head':
+        setDateTime(null);
+        setStartFrom(null);
+        break;
+      case 'time':
+        break;
+      case 'tail':
+        setDateTime(null);
+        setStartFrom({ tail: true });
+        break;
+    }
+  };
   const handleRefreshClick = () => {
     try {
       setStartFrom(dateTime ? { fromTime: Math.floor(Date.parse(dateTime) / 1000) } : null);
@@ -73,7 +95,6 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
 
   const handleFilterChange = (e) => {
     const value = e.target.value;
-    console.log('filters', filters);
     setFilters({ global: { ...filters.global, value}});
     setGlobalFilterValue(value);
 };
@@ -110,11 +131,13 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%'}}>
         <Toolbar className={classes.messageListToolbar}
           start={() => <h3>Queue | {queueDefinition?.queueName}</h3>}
-          end={() => <>
-            <label>From: &nbsp;</label>
-            <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" />
-            <Button onClick={handleRefreshClick} size="small">Refresh</Button>
-          </>}
+          end={() =>
+            <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+              <label>From:</label>
+              <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
+              <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" disabled={browseMode != 'time'} />
+              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
+            </div>}
         />
         <div style={{ flex: '1', overflow: 'hidden'}}>
           <DataTable

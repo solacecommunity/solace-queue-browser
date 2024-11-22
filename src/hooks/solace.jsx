@@ -343,9 +343,11 @@ export function useQueueBrowser(queueDefinition, startFrom) {
   const [browser, setBrowser] = useState(NULL_BROWSER);
 
   useEffect(() => {
-    const newBrowser = queueDefinition.queueName ?
-      new ReverseQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory) :
-      NULL_BROWSER;
+    const newBrowser = queueDefinition.queueName ? (
+      startFrom?.tail ? 
+        new ReverseQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory):
+        new ReplayQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory)
+    ) : NULL_BROWSER;
 
     setBrowser(newBrowser);
     return () => newBrowser.close();
