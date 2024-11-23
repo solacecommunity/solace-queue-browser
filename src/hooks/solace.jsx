@@ -125,7 +125,20 @@ class ReplayQueueBrowser {
       payload: msg.getBinaryAttachment().toString(),
       size: msg.getBinaryAttachment().length,
       rgmid: msg.getReplicationGroupMessageId().toString(),
-      destination: msg.getDestination(),
+      destination: msg.getDestination().getName(),
+      headers: {
+        applicationMessageId: msg.getApplicationMessageId(),
+        applicationMessageType: msg.getApplicationMessageType(),
+        correlationId: msg.getCorrelationId(),
+        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
+        replyTo: msg.getReplyTo(),
+        senderId: msg.getSenderId(),
+        senderTimestamp: msg.getSenderTimestamp(),
+        sequenceNumber: msg.getSequenceNumber()
+      },
+      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
+        return [key, msg.getUserPropertyMap().getField(key).getValue()]
+      }))
     }));
   }
   getFirstPage() {
@@ -278,7 +291,20 @@ class ReverseQueueBrowser {
       payload: msg.getBinaryAttachment().toString(),
       size: msg.getBinaryAttachment().length,
       rgmid: msg.getReplicationGroupMessageId().toString(),
-      destination: msg.getDestination(),
+      destination: msg.getDestination().getName(),
+      headers: {
+        applicationMessageId: msg.getApplicationMessageId(),
+        applicationMessageType: msg.getApplicationMessageType(),
+        correlationId: msg.getCorrelationId(),
+        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
+        replyTo: msg.getReplyTo(),
+        senderId: msg.getSenderId(),
+        senderTimestamp: msg.getSenderTimestamp(),
+        sequenceNumber: msg.getSequenceNumber()
+      },
+      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
+        return [key, msg.getUserPropertyMap().getField(key).getValue()]
+      }))
     }));
 
     
