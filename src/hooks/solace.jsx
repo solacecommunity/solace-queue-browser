@@ -121,11 +121,24 @@ class ReplayQueueBrowser {
     this.hasNext = msgMetaData[msgMetaData.length - 1]?.msgId < queue.highestMsgId;
 
     return messages.map((msg, n) => ({
-      ...(msgMetaData[n]),
+      meta: msgMetaData[n],
       payload: msg.getBinaryAttachment().toString(),
       size: msg.getBinaryAttachment().length,
-      rgmid: msg.getReplicationGroupMessageId().toString(),
-      destination: msg.getDestination(),
+      headers: {
+        destination: msg.getDestination().getName(),
+        rgmid: msg.getReplicationGroupMessageId().toString(),
+        applicationMessageId: msg.getApplicationMessageId(),
+        applicationMessageType: msg.getApplicationMessageType(),
+        correlationId: msg.getCorrelationId(),
+        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
+        replyTo: msg.getReplyTo(),
+        senderId: msg.getSenderId(),
+        senderTimestamp: msg.getSenderTimestamp(),
+        sequenceNumber: msg.getSequenceNumber()
+      },
+      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
+        return [key, msg.getUserPropertyMap().getField(key).getValue()]
+      }))
     }));
   }
   getFirstPage() {
@@ -274,11 +287,24 @@ class ReverseQueueBrowser {
     this.session.disconnect();
 
     const result = messages.reverse().map((msg, n) => ({
-      ...(msgMetaData[n]),
+      meta: msgMetaData[n],
       payload: msg.getBinaryAttachment().toString(),
       size: msg.getBinaryAttachment().length,
-      rgmid: msg.getReplicationGroupMessageId().toString(),
-      destination: msg.getDestination(),
+      headers: {
+        destination: msg.getDestination().getName(),
+        rgmid: msg.getReplicationGroupMessageId().toString(),
+        applicationMessageId: msg.getApplicationMessageId(),
+        applicationMessageType: msg.getApplicationMessageType(),
+        correlationId: msg.getCorrelationId(),
+        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
+        replyTo: msg.getReplyTo(),
+        senderId: msg.getSenderId(),
+        senderTimestamp: msg.getSenderTimestamp(),
+        sequenceNumber: msg.getSequenceNumber()
+      },
+      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
+        return [key, msg.getUserPropertyMap().getField(key).getValue()]
+      }))
     }));
 
     

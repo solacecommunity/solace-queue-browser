@@ -1,0 +1,14 @@
+.panelRoot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.panelHeader {
+
+}
+.panelOuterContent {
+  flex-grow: 1;
+}
+.panelInnerContent {
+  height: 100%;
+}

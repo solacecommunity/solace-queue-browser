@@ -103,14 +103,18 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
   const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
   
-  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.spooledTime)});
+  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.meta.spooledTime), headerValues: [ 
+    ...Object.values(message.meta), 
+    ...Object.values(message.headers), 
+    ...Object.values(message.userProperties) 
+  ]});
 
   const Header = () => {
     return (
         <div className="flex justify-content-end">
             <IconField iconPosition="left">
                 <InputIcon className="pi pi-search" />
-                <InputText value={globalFilterValue} onChange={handleFilterChange} placeholder="Payload Search" />
+                <InputText value={globalFilterValue} onChange={handleFilterChange} placeholder="Message Search" />
             </IconField>
         </div>
     );
@@ -148,16 +152,16 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
             resizableColumns 
             selectionMode="single"
             selection={selectedMessage}
-            dataKey="replicationGroupMsgId"
+            dataKey="meta.replicationGroupMsgId"
             onSelectionChange={handleRowSelection}
-            globalFilterFields={['payload']}
+            globalFilterFields={['payload','headerValues']}
             filters={filters}
             header={Header}
             footer={Footer}
             loading={isLoading}
             emptyMessage="No messages available"
           >
-            <Column field="msgId" header="Message ID" />
+            <Column field="meta.msgId" header="Message ID" />
             <Column field="spooledTime" header="Spooled Time" />
             <Column field="size" header="Payload Size (B)" />
           </DataTable>
