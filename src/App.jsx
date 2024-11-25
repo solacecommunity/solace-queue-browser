@@ -44,10 +44,10 @@ export default function App() {
               onMessageSelect={handleMessageSelect} 
             />
           </RootLayout.CenterPanel>
-          <RootLayout.RightTopPanel>
+          <RootLayout.RightTopPanel header="Payload">
             <MessagePayloadView message={selectedMessage} />
           </RootLayout.RightTopPanel>
-          <RootLayout.RightBottomPanel>
+          <RootLayout.RightBottomPanel header="Headers">
             <MessageHeaderView message={selectedMessage} />
           </RootLayout.RightBottomPanel>
         </RootLayout>

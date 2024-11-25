@@ -4,25 +4,23 @@ import { Splitter, SplitterPanel } from 'primereact/splitter';
 import { Panel } from 'primereact/panel';
 import classes from './styles.module.css';
 
-
-function BasePanel({ children }) {
-  return children;
-  // return <Panel 
-  //   header="panel"
-  //   pt={{ 
-  //     root: { className: classes.panelRoot },
-  //     header: { className: classes.panelHeader },
-  //     toggleableContent: { className: classes.panelOuterContent }, 
-  //     content: { className: classes.panelInnerContent }}}
-  //   >
-  //     {children}
-  //   </Panel>
+function BasePanel({ header, children }) {
+  return <Panel 
+    header={header}
+    pt={{ 
+      root: { className: classes.panelRoot },
+      header: { className: classes.panelHeader },
+      toggleableContent: { className: classes.panelOuterContent }, 
+      content: { className: classes.panelInnerContent }}}
+    >
+      {children}
+    </Panel>
 }
 
-const LeftPanel = (...args) => BasePanel(...args);
-const CenterPanel = (...args) => BasePanel(...args);
-const RightTopPanel= (...args) => BasePanel(...args);
-const RightBottomPanel = (...args) => BasePanel(...args);
+const LeftPanel = (props) => props.children;
+const CenterPanel = (props) => props.children;
+const RightTopPanel= (props) => BasePanel(props);
+const RightBottomPanel = (props) => BasePanel(props);
 
 function RootLayout({ children }) {
   const nodes = React.Children.toArray(children);
@@ -38,8 +36,8 @@ function RootLayout({ children }) {
       <SplitterPanel size={50}>{centerPanel}</SplitterPanel>
       <SplitterPanel size={25}>
         <Splitter style={{ height: '100%', width: '100%' }} layout="vertical">
-          <SplitterPanel size={70}>{rightTopPanel}</SplitterPanel>
-          <SplitterPanel size={30}>{rightBottomPanel}</SplitterPanel>
+          <SplitterPanel size={50}>{rightTopPanel}</SplitterPanel>
+          <SplitterPanel size={50}>{rightBottomPanel}</SplitterPanel>
         </Splitter>
       </SplitterPanel>
     </Splitter>

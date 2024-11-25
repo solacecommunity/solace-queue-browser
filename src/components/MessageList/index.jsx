@@ -103,7 +103,11 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
   const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
   
-  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.spooledTime), headerValues: [ ...Object.values(message.headers), ...Object.values(message.userProperties) ]});
+  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.meta.spooledTime), headerValues: [ 
+    ...Object.values(message.meta), 
+    ...Object.values(message.headers), 
+    ...Object.values(message.userProperties) 
+  ]});
 
   const Header = () => {
     return (
@@ -148,7 +152,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
             resizableColumns 
             selectionMode="single"
             selection={selectedMessage}
-            dataKey="replicationGroupMsgId"
+            dataKey="meta.replicationGroupMsgId"
             onSelectionChange={handleRowSelection}
             globalFilterFields={['payload','headerValues']}
             filters={filters}
@@ -157,7 +161,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
             loading={isLoading}
             emptyMessage="No messages available"
           >
-            <Column field="msgId" header="Message ID" />
+            <Column field="meta.msgId" header="Message ID" />
             <Column field="spooledTime" header="Spooled Time" />
             <Column field="size" header="Payload Size (B)" />
           </DataTable>

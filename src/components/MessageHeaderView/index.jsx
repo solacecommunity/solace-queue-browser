@@ -1,8 +1,8 @@
-import { Panel } from 'primereact/panel';
+import classes from './styles.module.css';
 
 export default function MessageHeaderView({ message }) {
-
+  const { meta, headers, userProperties } = message;
   return (
-    <pre>{JSON.stringify({...message.headers, ...message.userProperties}, null, ' ') || ''}</pre>
+    <pre className={classes.wrapText}>{meta ? JSON.stringify({ meta, headers, userProperties }, null, ' ') : ''}</pre>
   )
 }
