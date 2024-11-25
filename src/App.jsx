@@ -6,7 +6,9 @@ import DesktopContainer from './components/DesktopContainer';
 import RootLayout from './components/RootLayout';
 import TreeView from './components/BrokerQueueTreeView';
 import MessageList from './components/MessageList';
-import MessageDetails from './components/MessageDetails';
+import MessagePayloadView from './components/MessagePayloadView';
+import MessageHeaderView from './components/MessageHeaderView';
+
 
 import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
@@ -35,16 +37,19 @@ export default function App() {
           <RootLayout.LeftPanel>
             <TreeView brokers={brokers} brokerEditor={brokerEditor} onQueueSelected={handleQueueSelected} />
           </RootLayout.LeftPanel>
-          <RootLayout.TopPanel>
+          <RootLayout.CenterPanel>
             <MessageList 
               queueDefinition={selectedQueue} 
               selectedMessage={selectedMessage} 
               onMessageSelect={handleMessageSelect} 
             />
-          </RootLayout.TopPanel>
-          <RootLayout.BottomPanel>
-            <MessageDetails message={selectedMessage} />
-          </RootLayout.BottomPanel>
+          </RootLayout.CenterPanel>
+          <RootLayout.RightTopPanel header="Payload">
+            <MessagePayloadView message={selectedMessage} />
+          </RootLayout.RightTopPanel>
+          <RootLayout.RightBottomPanel header="Headers">
+            <MessageHeaderView message={selectedMessage} />
+          </RootLayout.RightBottomPanel>
         </RootLayout>
       </>
   );
