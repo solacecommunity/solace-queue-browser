@@ -19,22 +19,22 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   const browseModes = [
     { value: 'head', name: 'Queue Head' },
     { value: 'time', name: 'Date / Time' },
-    { value: 'tail', name: 'Queue End' } 
+    { value: 'tail', name: 'Queue End' }
   ];
 
-  const [ browseMode, setBrowseMode ] = useState(browseModes[0].value);
-  const [ dateTime, setDateTime ] = useState(null);
-  const [ startFrom, setStartFrom ] = useState(null);
+  const [browseMode, setBrowseMode] = useState(browseModes[0].value);
+  const [dateTime, setDateTime] = useState(null);
+  const [startFrom, setStartFrom] = useState(null);
 
   const browser = useQueueBrowser(queueDefinition, startFrom);
 
-  const [ globalFilterValue, setGlobalFilterValue ] = useState('');
-  const [ filters, setFilters] = useState({
+  const [globalFilterValue, setGlobalFilterValue] = useState('');
+  const [filters, setFilters] = useState({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
   });
 
-  const [ isLoading, setIsLoading ] = useState(false);
-  const [ messages, setMessages ] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState([]);
 
   const loadMessages = async (loader) => {
     setIsLoading(true);
@@ -49,7 +49,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
 
   const handleBrowseModeChange = (evt) => {
     setBrowseMode(evt.value);
-    switch(evt.value) {
+    switch (evt.value) {
       case 'head':
         setDateTime(null);
         setStartFrom(null);
@@ -88,35 +88,47 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   };
 
   const handleRowSelection = (e) => {
-    if(e.value !== null) {
+    if (e.value !== null) {
       onMessageSelect?.(e.value);
     }
   };
 
   const handleFilterChange = (e) => {
     const value = e.target.value;
-    setFilters({ global: { ...filters.global, value}});
+    setFilters({ global: { ...filters.global, value } });
     setGlobalFilterValue(value);
-};
+  };
+
+  const messageStatus = (message) => {
+    return message.payload !== undefined ? null : (
+      <i className="pi pi-question-circle text-yellow-500"></i>
+    );
+  }
+
+  const formatDateTime = (message) => {
+    const spooledEpoc = message.meta.spooledTime * 1000;
+    const tzOffset = new Date(spooledEpoc).getTimezoneOffset() * 60000;
+    return new Date(spooledEpoc - tzOffset).toISOString().replace('T', ' ').slice(0, 19);
+  }
 
 
-  const tzOffsetSec = (new Date()).getTimezoneOffset() * 60;
-  const formatDateTime = (epoch) => new Date((epoch - tzOffsetSec) * 1000).toISOString().replace('T', ' ').slice(0, 19);
-  
-  const formatData = (message) => ({ ...message, spooledTime: formatDateTime(message.meta.spooledTime), headerValues: [ 
-    ...Object.values(message.meta), 
-    ...Object.values(message.headers), 
-    ...Object.values(message.userProperties) 
-  ]});
+  const addFilterField = (message) => ({
+    ...message, filterField: [
+      message.payload,
+      ...Object.values(message.meta || {}),
+      ...Object.values(message.headers || {}),
+      ...Object.values(message.userProperties || {})
+    ]
+  });
 
   const Header = () => {
     return (
-        <div className="flex justify-content-end">
-            <IconField iconPosition="left">
-                <InputIcon className="pi pi-search" />
-                <InputText value={globalFilterValue} onChange={handleFilterChange} placeholder="Message Search" />
-            </IconField>
-        </div>
+      <div className="flex justify-content-end">
+        <IconField iconPosition="left">
+          <InputIcon className="pi pi-search" />
+          <InputText value={globalFilterValue} onChange={handleFilterChange} placeholder="Message Search" />
+        </IconField>
+      </div>
     );
   };
 
@@ -132,38 +144,39 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
 
   return (
     queueDefinition.queueName ? (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%'}}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
         <Toolbar className={classes.messageListToolbar}
           start={() => <h3>Queue | {queueDefinition?.queueName}</h3>}
           end={() =>
-            <div style={{display: 'flex', gap: 10, alignItems: 'center'}}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <label>From:</label>
               <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
               <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" disabled={browseMode != 'time'} />
               <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
             </div>}
         />
-        <div style={{ flex: '1', overflow: 'hidden'}}>
+        <div style={{ flex: '1', overflow: 'hidden' }}>
           <DataTable
             className={classes.messageListTable}
-            value={messages.map(formatData)}
-            size="small" 
+            value={messages.map(addFilterField)}
+            size="small"
             scrollable
-            resizableColumns 
+            resizableColumns
             selectionMode="single"
             selection={selectedMessage}
             dataKey="meta.replicationGroupMsgId"
             onSelectionChange={handleRowSelection}
-            globalFilterFields={['payload','headerValues']}
+            globalFilterFields={['filterField']}
             filters={filters}
             header={Header}
             footer={Footer}
             loading={isLoading}
             emptyMessage="No messages available"
           >
+            <Column body={messageStatus} />
             <Column field="meta.msgId" header="Message ID" />
-            <Column field="spooledTime" header="Spooled Time" />
-            <Column field="size" header="Payload Size (B)" />
+            <Column body={formatDateTime} header="Spooled Time" />
+            <Column field="meta.attachmentSize" header="Attachment Size (B)" />
           </DataTable>
         </div>
       </div>
