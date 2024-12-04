@@ -1,18 +1,20 @@
 import { createContext, useContext, useEffect, useState } from "react";
-import { BaseDirectory } from "@tauri-apps/api/fs";
+import { BaseDirectory } from "@tauri-apps/plugin-fs";
 import { fs } from '../utils/tauri/api';
 
 import { useSempApi } from "./SempClientProvider";
 import solace from '../utils/solace/solclientasync';
 
 const BrokerConfigContext = createContext();
+const baseDir = BaseDirectory.AppConfig;
 
 export const ConfigSource = {
   FS: {
+    name: 'fs',
     readConfig: async () => {
-      fs.createDir('', { dir: BaseDirectory.AppConfig, recursive: true });
-      if (await fs.exists('config.json', { dir: BaseDirectory.AppConfig })) {
-        const configData = await fs.readTextFile('config.json', { dir: BaseDirectory.AppConfig })
+      fs.mkdir('', { baseDir, recursive: true });
+      if (await fs.exists('config.json', { baseDir })) {
+        const configData = await fs.readTextFile('config.json', { baseDir });
         return JSON.parse(configData);
       } else {
         console.log('no config found');
@@ -20,10 +22,11 @@ export const ConfigSource = {
       }
     },
     writeConfig: async (brokers) => {
-      fs.writeTextFile('config.json', JSON.stringify(brokers), { dir: BaseDirectory.AppConfig });
+      await fs.writeTextFile('config.json', JSON.stringify(brokers), { baseDir });
     }
   },
   LOCAL_STORAGE: {
+    name: 'localStorage',
     readConfig: async () => {
       const configData = window.localStorage.getItem('config');
       return configData ? JSON.parse(configData) : [];
@@ -60,7 +63,6 @@ export function useBrokerConfig() {
       Object.assign(match, config);
     }
     source.writeConfig(brokers);
-    console.log('setbrokers')
     setBrokers([...brokers]);
   };
 
