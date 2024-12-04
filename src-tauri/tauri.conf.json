@@ -2,40 +2,27 @@
   "build": {
     "beforeDevCommand": "npm run dev",
     "beforeBuildCommand": "npm run build",
-    "devPath": "http://localhost:1420",
-    "distDir": "../dist",
-    "withGlobalTauri": true
+    "frontendDist": "../dist",
+    "devUrl": "http://localhost:1420"
   },
-  "package": {
-    "productName": "solace-queue-browser",
-    "version": "0.0.0"
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
   },
-  "tauri": {
-    "allowlist": {
-      "all": false,
-      "shell": {
-        "all": false,
-        "open": true
-      },
-      "http": {
-        "all": true,
-        "request": true,
-        "scope": [
-          "http://*",
-          "https://*"
-        ]
-      },
-      "window": {
-        "all": true
-      },
-      "fs": {
-        "all": true,
-        "scope": [ "$APPCONFIG", "$APPCONFIG/*" ]
-      },
-      "path": {
-        "all": true
-      }
-    },
+  "productName": "solace-queue-browser",
+  "mainBinaryName": "solace-queue-browser",
+  "version": "0.0.0",
+  "identifier": "com.solace.labs.queue-browser",
+  "plugins": {},
+  "app": {
+    "withGlobalTauri": true,
     "windows": [
       {
         "title": "solace-queue-browser",
@@ -43,23 +30,12 @@
         "width": 800,
         "height": 600,
         "decorations": false,
-        "transparent": true
+        "transparent": true,
+        "useHttpsScheme": true
       }
     ],
     "security": {
       "csp": null
-    },
-    "bundle": {
-      "active": true,
-      "targets": "all",
-      "identifier": "com.solace.labs.queue-browser",
-      "icon": [
-        "icons/32x32.png",
-        "icons/128x128.png",
-        "icons/128x128@2x.png",
-        "icons/icon.icns",
-        "icons/icon.ico"
-      ]
     }
   }
 }

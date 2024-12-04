@@ -5,7 +5,7 @@ import { SempClientProvider } from './SempClientProvider';
 
 import { TauriClient, FetchClient } from '../utils/solace/semp';
 
-const TAURI_APP = window.__TAURI__ ? true : false;
+const TAURI_APP = window.top.__TAURI__ ? true : false;
 
 export default function Providers({ children }) {
   const primeConfig = {

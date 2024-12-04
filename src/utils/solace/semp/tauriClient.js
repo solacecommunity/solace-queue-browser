@@ -1,4 +1,3 @@
-import { Body } from "@tauri-apps/api/http";
 import { http } from '../../tauri/api';
 
 
@@ -50,13 +49,13 @@ export class ApiClient {
     return url;
   }
 
-  callApi(   
+  async callApi(   
     path, httpMethod, pathParams, queryParams, headerParams,
     formParams, bodyParam, authNames, contentTypes, accepts, returnType) {
     
     const { fetch } = http;
     const url = this.buildUrl(path, pathParams)
-    const urlParams = this.normalizeParams(queryParams);
+    const urlParams = new URLSearchParams(this.normalizeParams(queryParams));
 
     const args = {
       request: { 
@@ -69,33 +68,32 @@ export class ApiClient {
     console.trace(`${httpMethod} ${url}`, args);
     const { username, password } = this.authentications.basicAuth;
 
-    //BUG: Tauri http fetch incorrectly URLEncodes commas in query
-    return fetch(url, {
+    const resp = await fetch(urlParams.size ? `${url}?${urlParams}` : url, {
       method: httpMethod,
       headers: {
         'Authorization': `Basic ${btoa(`${username}:${password}`)}`
       },
-      body: bodyParam ? Body.json(bodyParam) : undefined,
-      query: urlParams
-    }).then(resp => {
-      args.response = resp;
+      body: bodyParam ? JSON.stringify(bodyParam) : undefined,
+    });
 
-      const { status, data, ...rest } = resp;
-      const result = {
+    args.response = resp;
+
+    const data = await resp.json();
+    const { status, ...rest } = resp;
+    const result = {
+      status,
+      data,
+      response: {
         status,
-        data,
-        response: {
-          status,
-          body: data,
-          ...rest
-        }
-      };
-
-      if(!resp.ok) {
-        throw result;
+        body: data,
+        ...rest
       }
-      return result;
-    })
+    };
+
+    if(!resp.ok) {
+      throw result;
+    }
+    return result;
   }
 
   normalizeParams(params) {

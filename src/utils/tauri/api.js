@@ -1,5 +1,5 @@
 
-const { fs, http } = (window.parent?.__TAURI__ || window.__TAURI__ || {});
+const { fs, http } = (window.top.__TAURI__ || {});
 
 export {
   fs,
