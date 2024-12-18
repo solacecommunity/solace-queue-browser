@@ -23,6 +23,8 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   ];
 
   const [browseMode, setBrowseMode] = useState(browseModes[0].value);
+  const [calendarVisible, setCalendarVisible] = useState(false);
+  const [calendarMinMax, setCalendarMinMax] = useState({});
   const [dateTime, setDateTime] = useState(null);
   const [startFrom, setStartFrom] = useState(null);
 
@@ -52,14 +54,27 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     switch (evt.value) {
       case 'head':
         setDateTime(null);
-        setStartFrom(null);
+        setStartFrom({ head: true});
         break;
       case 'time':
+        setStartFrom({ fromTime: null});
         break;
       case 'tail':
         setDateTime(null);
         setStartFrom({ tail: true });
         break;
+    }
+  };
+  const handleCalendarVisibleChangle = async () => {
+    if(calendarVisible) {
+      setCalendarVisible(false);
+    } else {
+      const { min, max } = await browser?.getMinMaxFromTime();
+      setCalendarMinMax({
+        min: new Date(min * 1000),
+        max: new Date(max * 1000)
+      });
+      setCalendarVisible(true);
     }
   };
   const handleRefreshClick = () => {
@@ -151,7 +166,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <label>From:</label>
               <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
-              <Calendar showTime value={dateTime} onChange={handleCalendarChange} className="p-inputtext-sm" disabled={browseMode != 'time'} />
+              <Calendar showTime visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} disabled={browseMode != 'time'} />
               <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
             </div>}
         />
