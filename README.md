@@ -47,3 +47,32 @@ Once the prerequisites have been met, it is possible to run in desktop mode:
 npm install
 npm run tauri dev
 ```
+
+## Publishing Project to GitHub Pages
+
+A simple version of this app is available via GitHub pages, on the `gh-pages` branch of the repository. In order to publish a new release to pages, follow this procedure:
+
+_Checkout the pages branch and pull latest changes from main_
+```
+git checkout gh-pages
+git pull origin main
+```
+Resove any merge conflicts, if any, and continue.
+
+_Create a production build and publish to the desired target (latest or stable)_
+```
+npm run build
+npm run publish latest
+```
+
+_Preview the changes locally_
+```
+npm run preview
+```
+Open a browser and navigate to http://localhost:4173/stable/ or http://localhost:4173/latest/ to verify changes before pushing.
+
+_Commit the changes and push back to the repo_
+```
+git commit -a -m "Update latest with new feature ..."
+git push origin gh-pages
+```
