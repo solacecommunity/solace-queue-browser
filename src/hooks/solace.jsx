@@ -161,6 +161,48 @@ class ReplayQueueBrowser {
   }
   close() {
   }
+  async getMinMaxFromTime() {
+    const { vpn } = this.queueDefinition;
+
+    try {
+      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
+      const { replayLogName } = replayLogs.data[0];
+
+      const minMaxSpooledTime = await Promise.all([
+        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${replayLogName}</name>`,
+            `<vpn-name>${vpn}</vpn-name>`,
+            `<messages/><oldest/>`,
+            `<msg-id>1</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [ { spooledTime } ] }) => ['min', spooledTime]).catch(() => ['min', null]),
+        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${replayLogName}</name>`,
+            `<vpn-name>${vpn}</vpn-name>`,
+            `<messages/><newest/>`,
+            `<msg-id>9223372036854775808</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [ { spooledTime } ] }) => ['max', spooledTime]).catch(() => ['max', null]),
+      ]);
+      return Object.fromEntries(minMaxSpooledTime);
+    } catch (ex) {
+      return { min: null, max: null};
+    }
+  }
   async #getQueueReplayFrom({ lowestMsgId }) {
     const { vpn } = this.queueDefinition;
     try {
@@ -553,9 +595,9 @@ export function useQueueBrowser(queueDefinition, startFrom) {
     const newBrowser = queueDefinition.queueName ? (
       startFrom?.tail ? 
         new ReverseQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory) :
-      startFrom?.fromTime ?
-        new ReplayQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory) :
-        new ForwardQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory)
+      startFrom?.head ?
+        new ForwardQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory) :
+        new ReplayQueueBrowser(queueDefinition, startFrom, sempApi, solclientFactory)
     ) : NULL_BROWSER;
 
     setBrowser(newBrowser);

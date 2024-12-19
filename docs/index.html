@@ -1,17 +1,36 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" href="./favicon.ico" />
-    <link id="theme-dark" rel="stylesheet" href="./themes/lara-dark-teal/theme.css" />
-    <link id="theme-light" rel="prefetch" href="./themes/lara-light-teal/theme.css" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Solace Queue Browser</title>
-    <script type="module" crossorigin src="./assets/index-C5MRhRTB.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-BUnyqDJG.css">
-  </head>
+<html>
 
-  <body>
-    <div id="app"></div>
-  </body>
+<head>
+  <style>
+    html {
+      font-family: 'Open Sans', sans-serif;
+      text-align: center;
+      margin-top: 10vh;
+    }
+
+    a {
+      color: #2dd4bf;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html {
+        background-color: black;
+        color: white;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Redirecting</h1>
+  <main>You should be automatically redirected to the stable release. If not <a href="/stable/">click here.</a></main>
+  <script>
+    if (window.location.pathname === '/') {
+      setTimeout(() => {
+        window.location.replace('/stable/');
+      }, 800);
+    }
+  </script>
+</body>
+
 </html>
