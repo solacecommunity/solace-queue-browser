@@ -23,11 +23,11 @@
 
 <body>
   <h1>Redirecting</h1>
-  <main>You should be automatically redirected to the stable release. If not <a href="/stable/">click here.</a></main>
+  <main>You should be automatically redirected to the stable release. If not <a href="./stable/">click here.</a></main>
   <script>
-    if (window.location.pathname === '/') {
+    if (window.location.pathname === '/solace-queue-browser/') {
       setTimeout(() => {
-        window.location.replace('/stable/');
+        window.location.replace('./stable/');
       }, 800);
     }
   </script>
