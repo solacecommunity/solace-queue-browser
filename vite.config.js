@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 // https://vitejs.dev/config/
 export default defineConfig(async () => ({
   plugins: [react()],
+  base: './',
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   //
@@ -18,4 +19,7 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  define: {
+    'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),    
+  }
 }));

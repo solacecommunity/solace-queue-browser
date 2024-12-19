@@ -73,6 +73,13 @@ Open a browser and navigate to http://localhost:4173/stable/ or http://localhost
 
 _Commit the changes and push back to the repo_
 ```
+git add -A
 git commit -a -m "Update latest with new feature ..."
 git push origin gh-pages
+```
+
+A note to maintainers: the build process will insert a timestamp into the `index.html` which can be observed for troubleshooting by inspecting the page content. For example, the HTML of the website should begin as follows:
+```
+<!doctype html>
+<html lang="en" data-build-time="2024-12-19T22:03:42.043Z">
 ```
