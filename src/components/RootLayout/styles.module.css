@@ -8,7 +8,9 @@
 }
 .panelOuterContent {
   flex-grow: 1;
+  overflow-y: hidden;
 }
 .panelInnerContent {
   height: 100%;
+  overflow-y: auto;
 }

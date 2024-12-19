@@ -122,8 +122,7 @@ class ReplayQueueBrowser {
 
     return messages.map((msg, n) => ({
       meta: msgMetaData[n],
-      payload: msg.getBinaryAttachment().toString(),
-      size: msg.getBinaryAttachment().length,
+      payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
       headers: {
         destination: msg.getDestination().getName(),
         replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
@@ -334,7 +333,7 @@ class ForwardQueueBrowser {
 
     messages.forEach(msg => {
       const msgObj = {
-        payload: msg.getBinaryAttachment().toString(),
+        payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
         headers: {
           destination: msg.getDestination().getName(),
           replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
@@ -509,7 +508,7 @@ class ReverseQueueBrowser {
 
     messages.forEach(msg => {
       const msgObj = {
-        payload: msg.getBinaryAttachment().toString(),
+        payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
         headers: {
           destination: msg.getDestination().getName(),
           replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
