@@ -20,6 +20,11 @@ iframe {
   flex: 1;
 }
 
+svg {
+  min-width: fit-content;
+  min-height: fit-content;
+}
+
 #app {
   border: 1px solid var(--surface-border);
   background-color: var(--surface-ground);

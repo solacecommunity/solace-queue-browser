@@ -19,4 +19,7 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
+  define: {
+    'import.meta.env.BUILD_TIME': JSON.stringify(new Date().toISOString()),    
+  }
 }));

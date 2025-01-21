@@ -15,13 +15,13 @@ import 'primeicons/primeicons.css';
 import './App.css';
 
 export default function App() {
-  const [selectedQueue, setSelectedQueue] = useState({});
+  const [selectedSource, setSelectedSource] = useState({});
   const [selectedMessage, setSelectedMessage] = useState({});
 
   const { brokers, brokerEditor } = useBrokerConfig();
 
-  const handleQueueSelected = (queue) => {
-    setSelectedQueue(queue);
+  const handleSourceSelected = (queue) => {
+    setSelectedSource(queue);
     setSelectedMessage({});
   };
 
@@ -35,11 +35,11 @@ export default function App() {
       <>
         <RootLayout>
           <RootLayout.LeftPanel>
-            <TreeView brokers={brokers} brokerEditor={brokerEditor} onQueueSelected={handleQueueSelected} />
+            <TreeView brokers={brokers} brokerEditor={brokerEditor} onSourceSelected={handleSourceSelected} />
           </RootLayout.LeftPanel>
           <RootLayout.CenterPanel>
             <MessageList 
-              queueDefinition={selectedQueue} 
+              sourceDefinition={selectedSource} 
               selectedMessage={selectedMessage} 
               onMessageSelect={handleMessageSelect} 
             />
