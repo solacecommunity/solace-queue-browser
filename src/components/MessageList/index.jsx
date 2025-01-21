@@ -8,18 +8,23 @@ import { Toolbar } from 'primereact/toolbar';
 import { InputText } from 'primereact/inputtext';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
+import { Dropdown } from 'primereact/dropdown';
+import { FilterMatchMode } from 'primereact/api';
 
 import { useQueueBrowser } from "../../hooks/solace";
 
 import classes from './styles.module.css';
-import { FilterMatchMode } from 'primereact/api';
-import { Dropdown } from 'primereact/dropdown';
 
-export default function MessageList({ queueDefinition, selectedMessage, onMessageSelect }) {
-  const browseModes = [
+export default function MessageList({ sourceDefinition, selectedMessage, onMessageSelect }) {
+  const { sourceName, type } = sourceDefinition;
+  const sourceType = (type === 'queue') ? 'Queue' : 'Replay';
+
+  const browseModes = sourceType === 'Queue' ? [
     { value: 'head', name: 'Queue Head' },
     { value: 'time', name: 'Date / Time' },
     { value: 'tail', name: 'Queue End' }
+  ] : [
+    { value: 'time', name: 'Date / Time' },
   ];
 
   const [browseMode, setBrowseMode] = useState(browseModes[0].value);
@@ -28,7 +33,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   const [dateTime, setDateTime] = useState(null);
   const [startFrom, setStartFrom] = useState(null);
 
-  const browser = useQueueBrowser(queueDefinition, startFrom);
+  const browser = useQueueBrowser(sourceDefinition, startFrom);
 
   const [globalFilterValue, setGlobalFilterValue] = useState('');
   const [filters, setFilters] = useState({
@@ -49,15 +54,19 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     loadMessages(() => browser.getFirstPage());
   }, [browser]);
 
+  useEffect(() => {
+    setBrowseMode(browseModes[0].value);
+  }, [sourceType]);
+
   const handleBrowseModeChange = (evt) => {
     setBrowseMode(evt.value);
     switch (evt.value) {
       case 'head':
         setDateTime(null);
-        setStartFrom({ head: true});
+        setStartFrom({ head: true });
         break;
       case 'time':
-        setStartFrom({ fromTime: null});
+        setStartFrom({ fromTime: null });
         break;
       case 'tail':
         setDateTime(null);
@@ -66,7 +75,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     }
   };
   const handleCalendarVisibleChangle = async () => {
-    if(calendarVisible) {
+    if (calendarVisible) {
       setCalendarVisible(false);
     } else {
       const { min, max } = await browser?.getMinMaxFromTime();
@@ -136,7 +145,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     ]
   });
 
-  const Header = () => {
+  const ListHeader = () => {
     return (
       <div className="flex justify-content-end">
         <IconField iconPosition="left">
@@ -147,7 +156,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
     );
   };
 
-  const Footer = () => {
+  const ListFooter = () => {
     return (
       <div>
         <Button text onClick={handleFirstClick}>First</Button>
@@ -158,10 +167,10 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
   };
 
   return (
-    queueDefinition.queueName ? (
+    (sourceName) ? (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
         <Toolbar className={classes.messageListToolbar}
-          start={() => <h3>Queue | {queueDefinition?.queueName}</h3>}
+          start={() => <h3>{sourceType} | {sourceName}</h3>}
           end={() =>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <label>From:</label>
@@ -183,8 +192,8 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
             onSelectionChange={handleRowSelection}
             globalFilterFields={['filterField']}
             filters={filters}
-            header={Header}
-            footer={Footer}
+            header={ListHeader}
+            footer={ListFooter}
             loading={isLoading}
             emptyMessage="No messages available"
           >
@@ -196,7 +205,7 @@ export default function MessageList({ queueDefinition, selectedMessage, onMessag
         </div>
       </div>
     ) : (
-      <div>Please select a queue.</div>
+      <div style={{ margin: '1em' }}>Please select a queue or topic to browse.</div>
     )
   );
 }

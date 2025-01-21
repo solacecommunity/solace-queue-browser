@@ -60,9 +60,10 @@ export default function BrokerConfigDialog( { config, brokerEditor, onHide }) {
   }
 
   const Header = () => (
+    (!visible) ? null :
     (values.id) ? 
-    <>Edit Broker</> :
-    <>Add New Broker</>
+      <>Edit Broker</> :
+      <>Add New Broker</>
   );
 
   const Footer = () => (
