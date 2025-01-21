@@ -1,0 +1,17 @@
+.panelRoot {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.panelHeader {
+
+}
+.panelOuterContent {
+  flex-grow: 1;
+  overflow-y: hidden;
+}
+.panelInnerContent {
+  height: 100%;
+  overflow-y: auto;
+  padding: 0;
+}
