@@ -369,7 +369,7 @@ class ReplayTopicBrowser {
   close() {
   }
   async getMinMaxFromTime() {
-    const { vpn } = this.queueDefinition;
+    const { config: { vpn } } = this.sourceDefinition;
 
     try {
       const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
