@@ -18,7 +18,8 @@ import classes from './styles.module.css';
 const BROWSE_MODE = {
   HEAD: 'head',
   TAIL: 'tail',
-  TIME: 'time'
+  TIME: 'time',
+  MSGID: 'msgid'
 };
 
 export default function MessageList({ sourceDefinition, selectedMessage, onMessageSelect }) {
@@ -28,12 +29,14 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     (type === SOURCE_TYPE.QUEUE) ? [
       'Queue', [
         { value: BROWSE_MODE.HEAD, name: 'Queue Head' },
+        { value: BROWSE_MODE.TAIL, name: 'Queue End' },
         { value: BROWSE_MODE.TIME, name: 'Date / Time' },
-        { value: BROWSE_MODE.TAIL, name: 'Queue End' }
+        { value: BROWSE_MODE.MSGID, name: 'Message ID' }
       ]] :
       (type === SOURCE_TYPE.TOPIC) ? [
         'Topic', [
           { value: BROWSE_MODE.TIME, name: 'Date / Time' },
+          { value: BROWSE_MODE.MSGID, name: 'Message ID' }
         ]
       ] : [
         '', [
@@ -45,6 +48,7 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
   const [calendarVisible, setCalendarVisible] = useState(false);
   const [calendarMinMax, setCalendarMinMax] = useState({});
   const [dateTime, setDateTime] = useState(null);
+  const [msgIdText, setMsgIdText] = useState('');
   const [startFrom, setStartFrom] = useState(null);
 
   const browser = useQueueBrowser(sourceDefinition, startFrom);
@@ -74,17 +78,19 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
 
   const handleBrowseModeChange = (evt) => {
     setBrowseMode(evt.value);
+    setDateTime(null);
+    setMsgIdText('');
     switch (evt.value) {
       case BROWSE_MODE.HEAD:
-        setDateTime(null);
         setStartFrom({ queuePosition: MESSAGE_ORDER.OLDEST });
         break;
       case BROWSE_MODE.TAIL:
-        setDateTime(null);
         setStartFrom({ queuePosition: MESSAGE_ORDER.NEWEST });
         break;
       case BROWSE_MODE.TIME:
-        setDateTime(null);
+        setStartFrom({ fromTime: null });
+        break;
+      case BROWSE_MODE.MSGID:
         setStartFrom({ fromTime: null });
         break;
     }
@@ -107,7 +113,21 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
         const fromTime = dateTime ? Math.floor(Date.parse(dateTime) / 1000) : null;
         setStartFrom({ fromTime });
       } catch {
-        console.error('Invalid date format');
+        console.error('Invalid date format'); //TODO: send toast notification
+        setStartFrom({ fromTime: null });
+      }
+    }
+
+    if (browseMode === BROWSE_MODE.MSGID) {
+      try {
+        console.log(msgIdText);
+        const fromMsgId = msgIdText.startsWith('rmid1:') ?
+          window.parseInt(msgIdText.substring(24).replace('-', ''), 16) :
+          window.parseInt(msgIdText);
+        setStartFrom((fromMsgId > 0) ? { fromMsgId } : { fromTime: null });
+      } catch {
+        console.error('Invalid message id'); //TODO: send toast notification
+
         setStartFrom({ fromTime: null });
       }
     }
@@ -128,6 +148,10 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
   const handleCalendarChange = (e) => {
     setDateTime(e.value);
   };
+
+  const handleMsgIdTextChange = (e) => {
+    setMsgIdText(e.target.value);
+  }
 
   const handleRowSelection = (e) => {
     if (e.value !== null) {
@@ -152,7 +176,6 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     const tzOffset = new Date(spooledEpoc).getTimezoneOffset() * 60000;
     return new Date(spooledEpoc - tzOffset).toISOString().replace('T', ' ').slice(0, 19);
   }
-
 
   const addFilterField = (message) => ({
     ...message, filterField: [
@@ -193,8 +216,14 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <label>From:</label>
               <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
-              <Calendar showTime visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} disabled={browseMode != BROWSE_MODE.TIME} />
-              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != BROWSE_MODE.TIME}>Refresh</Button>
+              {
+                (browseMode === BROWSE_MODE.HEAD || browseMode === BROWSE_MODE.TAIL) ?
+                  <InputText disabled={true} /> :
+                  (browseMode === BROWSE_MODE.MSGID) ?
+                    <InputText placeholder="ID or RGMID" value={msgIdText} onChange={handleMsgIdTextChange} /> :
+                    <Calendar showTime placeholder="Beginning of log" visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} />
+              }
+              <Button onClick={handleRefreshClick} size="small" disabled={!(browseMode === BROWSE_MODE.TIME || browseMode === BROWSE_MODE.MSGID)}>Refresh</Button>
             </div>}
         />
         <div style={{ flex: '1', overflow: 'hidden' }}>
