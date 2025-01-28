@@ -18,11 +18,15 @@ export const MESSAGE_ORDER = {
 
 
 class BaseBrowser {
-  constructor({ sourceDefinition = { config: {} }, sempApi, solclientFactory } = {}) {
+  constructor({ sourceDefinition = { config: {} }, startFrom, sempApi, solclientFactory } = {}) {
     this.sourceDefinition = sourceDefinition;
-    const { config } = sourceDefinition;
+    this.startFrom = startFrom;
+
+    const { config, topics } = sourceDefinition;
     this.sempClient = sempApi?.getClient(config);
     this.solclientFactory = solclientFactory;
+    this.topics = topics;
+    this.replayLogName = undefined;
 
     const {
       hostName, clientPort, useTls, vpn,
@@ -36,7 +40,6 @@ class BaseBrowser {
       password: clientPassword
     }) : null;
 
-    this.startFrom = {};
     this.nextPage = null;
     this.prevPages = [];
     this.pageSize = 50;
@@ -89,20 +92,9 @@ class BaseBrowser {
   }
 
   async replayToTempQueue({ sourceName, replayFrom }) {
-    const { config: { vpn } } = this.sourceDefinition;
     const count = this.pageSize;
 
-    // TODO: Lazy initialize these or externalize...
-    let { topics } = this.sourceDefinition;
-    if (topics === undefined) {
-      const { data: queue } = await this.sempClient.getMsgVpnQueue(vpn, sourceName);
-      const { data: subscriptions } = await this.sempClient.getMsgVpnQueueSubscriptions(vpn, sourceName);
-      topics = this.topics || [
-        queue.networkTopic,
-        ...subscriptions.map(s => s.subscriptionTopic)
-      ];
-    }
-
+    const topics = await this.getTopics(sourceName);
     await this.session.connect();
 
     const tempQueueName = `#QB/${sourceName}/${Date.now()}`;
@@ -149,13 +141,33 @@ class BaseBrowser {
     };
   }
 
-  async getQueueReplayFrom({ messageId }) {
+  async getReplayLogName() {
     const { config: { vpn } } = this.sourceDefinition;
-    // TODO: this should be called once per instance.. lazy loaded and saved to a class field
-    const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-    const { replayLogName } = replayLogs.data[0];
+    if (this.replayLogName === undefined) {
+      const { data: [{ replayLogName }] } = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
+      this.replayLogName = replayLogName;
+    }
+    return this.replayLogName;
+  }
+
+  async getTopics(sourceName) {
+    if (this.topics === undefined) {
+      const { config: { vpn } } = this.sourceDefinition;
+      const { data: { networkTopic } } = await this.sempClient.getMsgVpnQueue(vpn, sourceName, { select: ['networkTopic'] });
+      const { data: subscriptions } = await this.sempClient.getMsgVpnQueueSubscriptions(vpn, sourceName);
+
+      this.topics = [
+        networkTopic,
+        ...subscriptions.map(s => s.subscriptionTopic)
+      ];
+    }
+    return this.topics;
+  }
+
+  async getQueueReplayFrom({ messageId }) {
     try {
       const { config: { vpn } } = this.sourceDefinition;
+      const replayLogName = await this.getReplayLogName();
       const cursor = [
         `<rpc><show><replay-log>`,
         `<name>${replayLogName}</name>`,
@@ -236,7 +248,7 @@ class LoggedMessagesReplayBrowser extends BaseBrowser {
     const { data: tempQueue } = await this.sempClient.getMsgVpnQueue(vpn, tempQueueName);
     cleanupReplay();
 
-    if(msgMetaData.length === 0) {
+    if (msgMetaData.length === 0) {
       return [];
     }
 
@@ -250,12 +262,9 @@ class LoggedMessagesReplayBrowser extends BaseBrowser {
   }
 
   async getMinMaxFromTime() {
-    const { config: { vpn } } = this.sourceDefinition;
-
     try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
-
+      const { config: { vpn } } = this.sourceDefinition;
+      const replayLogName = await this.getReplayLogName();
       const minMaxSpooledTime = await Promise.all([
         this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
           cursor: [
@@ -294,11 +303,19 @@ class LoggedMessagesReplayBrowser extends BaseBrowser {
 }
 
 class QueuedMessagesReplayBrowser extends BaseBrowser {
-  constructor({ sourceDefinition, messageOrderBy, sempApi, solclientFactory }) {
-    super({ sourceDefinition, sempApi, solclientFactory });
+  constructor({ sourceDefinition, startFrom, sempApi, solclientFactory }) {
+    const messageOrderBy = startFrom.queuePosition;
+    const isReversed = (messageOrderBy === MESSAGE_ORDER.NEWEST);
+
+    super({
+      sourceDefinition,
+      startFrom: { fromMsgId: isReversed ? MAX_MSG_ID : MIN_MSG_ID },
+      sempApi,
+      solclientFactory
+    });
+
     this.messageOrderBy = messageOrderBy;
-    this.isReversed = (this.messageOrderBy === MESSAGE_ORDER.NEWEST);
-    this.startFrom = { fromMsgId: this.isReversed ? MAX_MSG_ID : MIN_MSG_ID }; //TODO: pass as constructor argument to parent!
+    this.isReversed = isReversed;
   }
 
   async getPage(page) {
@@ -312,7 +329,7 @@ class QueuedMessagesReplayBrowser extends BaseBrowser {
         direction: this.messageOrderBy,
         count
       });
-    if(msgMetaData.length === 0) {
+    if (msgMetaData.length === 0) {
       return [];
     }
 
@@ -349,7 +366,7 @@ export function useQueueBrowser(sourceDefinition, startFrom) {
     }
     const newBrowser = (type) ? (
       (startFrom?.queuePosition) ?
-        new QueuedMessagesReplayBrowser({ sourceDefinition, messageOrderBy: startFrom.queuePosition, sempApi, solclientFactory }) :
+        new QueuedMessagesReplayBrowser({ sourceDefinition, startFrom, sempApi, solclientFactory }) :
         new LoggedMessagesReplayBrowser({ sourceDefinition, startFrom, sempApi, solclientFactory })
     ) : NULL_BROWSER;
 
