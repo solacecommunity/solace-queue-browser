@@ -11,21 +11,35 @@ import { InputIcon } from 'primereact/inputicon';
 import { Dropdown } from 'primereact/dropdown';
 import { FilterMatchMode } from 'primereact/api';
 
-import { useQueueBrowser } from "../../hooks/solace";
+import { useQueueBrowser, SOURCE_TYPE, MESSAGE_ORDER } from "../../hooks/solace";
 
 import classes from './styles.module.css';
 
+const BROWSE_MODE = {
+  HEAD: 'head',
+  TAIL: 'tail',
+  TIME: 'time'
+};
+
 export default function MessageList({ sourceDefinition, selectedMessage, onMessageSelect }) {
   const { sourceName, type } = sourceDefinition;
-  const sourceType = (type === 'queue') ? 'Queue' : 'Replay';
 
-  const browseModes = sourceType === 'Queue' ? [
-    { value: 'head', name: 'Queue Head' },
-    { value: 'time', name: 'Date / Time' },
-    { value: 'tail', name: 'Queue End' }
-  ] : [
-    { value: 'time', name: 'Date / Time' },
-  ];
+  const [sourceLabel, browseModes] =
+    (type === SOURCE_TYPE.QUEUE) ? [
+      'Queue', [
+        { value: BROWSE_MODE.HEAD, name: 'Queue Head' },
+        { value: BROWSE_MODE.TIME, name: 'Date / Time' },
+        { value: BROWSE_MODE.TAIL, name: 'Queue End' }
+      ]] :
+      (type === SOURCE_TYPE.TOPIC) ? [
+        'Topic', [
+          { value: BROWSE_MODE.TIME, name: 'Date / Time' },
+        ]
+      ] : [
+        '', [
+          { value: null }
+        ]
+      ];
 
   const [browseMode, setBrowseMode] = useState(browseModes[0].value);
   const [calendarVisible, setCalendarVisible] = useState(false);
@@ -55,22 +69,23 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
   }, [browser]);
 
   useEffect(() => {
-    setBrowseMode(browseModes[0].value);
-  }, [sourceType]);
+    handleBrowseModeChange({ value: browseModes[0].value });
+  }, [type]);
 
   const handleBrowseModeChange = (evt) => {
     setBrowseMode(evt.value);
     switch (evt.value) {
-      case 'head':
+      case BROWSE_MODE.HEAD:
         setDateTime(null);
-        setStartFrom({ head: true });
+        setStartFrom({ queuePosition: MESSAGE_ORDER.OLDEST });
         break;
-      case 'time':
+      case BROWSE_MODE.TAIL:
+        setDateTime(null);
+        setStartFrom({ queuePosition: MESSAGE_ORDER.NEWEST });
+        break;
+      case BROWSE_MODE.TIME:
+        setDateTime(null);
         setStartFrom({ fromTime: null });
-        break;
-      case 'tail':
-        setDateTime(null);
-        setStartFrom({ tail: true });
         break;
     }
   };
@@ -87,11 +102,14 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     }
   };
   const handleRefreshClick = () => {
-    try {
-      setStartFrom(dateTime ? { fromTime: Math.floor(Date.parse(dateTime) / 1000) } : null);
-    } catch {
-      console.error('Invalid date format');
-      setStartFrom(null);
+    if (browseMode === BROWSE_MODE.TIME) {
+      try {
+        const fromTime = dateTime ? Math.floor(Date.parse(dateTime) / 1000) : null;
+        setStartFrom({ fromTime });
+      } catch {
+        console.error('Invalid date format');
+        setStartFrom({ fromTime: null });
+      }
     }
   };
 
@@ -170,13 +188,13 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     (sourceName) ? (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
         <Toolbar className={classes.messageListToolbar}
-          start={() => <h3>{sourceType} | {sourceName}</h3>}
+          start={() => <h3>{sourceLabel} | {sourceName}</h3>}
           end={() =>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
               <label>From:</label>
               <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
-              <Calendar showTime visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} disabled={browseMode != 'time'} />
-              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
+              <Calendar showTime visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} disabled={browseMode != BROWSE_MODE.TIME} />
+              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != BROWSE_MODE.TIME}>Refresh</Button>
             </div>}
         />
         <div style={{ flex: '1', overflow: 'hidden' }}>
