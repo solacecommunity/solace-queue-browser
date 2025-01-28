@@ -5,6 +5,8 @@ This project offers a Solace Queue Browser which can run either as a desktop app
 > [!IMPORTANT]
 > Most of the capabilities of this tool require replay to be enabled. In most modes of operation, the utiltiy assumes all messages found on a given queue are also present on the Replay Log. Unexpected behavior may occur if the replay log has been trimmed while messages are still on the queue, or if replay filtering results in a mix replayable and non-replayable messages. Additionally, the browser will typically show messages that have been acknowledged out-of-order as still being present on a given queue.
 
+A browser-based version of this utility can be [found here](https://solacecommunity.github.io/solace-queue-browser).
+
 ## Core Capabilities
 
 - Bidrectionally browsing a queue (replay-based) from:
