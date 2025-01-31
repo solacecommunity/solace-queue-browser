@@ -5,7 +5,7 @@ const { SolclientFactory } = solace;
 const factoryProps = new solace.SolclientFactoryProperties();
 factoryProps.profile = solace.SolclientFactoryProfiles.version10_5;
 solace.SolclientFactory.init(factoryProps);
-solace.SolclientFactory.setLogLevel(solace.LogLevel.INFO);
+solace.SolclientFactory.setLogLevel(solace.LogLevel.ERROR);
 
 (() => {
   function createOperationError(type, errorStr) {
@@ -24,7 +24,7 @@ solace.SolclientFactory.setLogLevel(solace.LogLevel.INFO);
     let error = constError;
     let subscriptionInfo = {};
     subscriptionInfo.isWildcarded = isWildcarded;
-  
+
     return { bytes, offset, error, isWildcarded, subscriptionInfo };
   }
 
@@ -67,20 +67,20 @@ function createAsyncSession(sessionProperties) {
       return new Promise((resolve, reject) => {
         const [_, correlationKey, __] = args;
         const { SUBSCRIPTION_OK, SUBSCRIPTION_ERROR } = solace.MessageConsumerEventName;
-        
+
         let onOk, onError;
         const createHandler = execute => evt => {
-          if(evt.correlationKey !== correlationKey) {
+          if (evt.correlationKey !== correlationKey) {
             return;
           }
           messageConsumer.removeListener(SUBSCRIPTION_OK, onOk);
           messageConsumer.removeListener(SUBSCRIPTION_ERROR, onError);
           execute(evt);
         };
-        
+
         onOk = createHandler(resolve);
         onError = createHandler(reject);
-        
+
         messageConsumer.on(SUBSCRIPTION_OK, onOk);
         messageConsumer.on(SUBSCRIPTION_ERROR, onError);
 
@@ -108,24 +108,32 @@ function createAsyncSession(sessionProperties) {
     function readMessagesAsync(count, timeout) {
       return new Promise((resolve) => {
         const messages = [];
-        const onMessageTimeout = () => { 
-          console.warn('Timeout waiting for messages');
+        let onMessage, onMessageTimeout, messageTimeout;
+
+        const stopAndResolve = () => {
+          queueBrowser.stop();
+          queueBrowser.removeListener(solace.QueueBrowserEventName.MESSAGE, onMessage);
           resolve(messages);
+        }
+
+        onMessageTimeout = () => {
+          console.warn('Timeout waiting for messages');
+          stopAndResolve();
         };
 
-        let messageTimeout = setTimeout(onMessageTimeout, timeout);
-
-        queueBrowser.on(solace.QueueBrowserEventName.MESSAGE, msg => {
+        onMessage = (msg) => {
           messages.push(msg);
           clearTimeout(messageTimeout);
           if (messages.length >= count) {
-            queueBrowser.stop();
-            resolve(messages);
+            stopAndResolve();
             return;
           }
           messageTimeout = setTimeout(onMessageTimeout, timeout);
-        });
+        }
 
+        messageTimeout = setTimeout(onMessageTimeout, timeout);
+
+        queueBrowser.on(solace.QueueBrowserEventName.MESSAGE, onMessage);
         queueBrowser.start();
       });
     }

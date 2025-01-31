@@ -95,7 +95,7 @@ export default function TreeView({ brokers, brokerEditor, onSourceSelected }) {
         key: `queue/${n}`,
         label: queue.queueName,
         data: {
-          type: 'queue',
+          type: config.testResult.replay ? 'queue' : 'basic',
           toolIcon: '',
           config,
           sourceName: queue.queueName
@@ -124,7 +124,6 @@ export default function TreeView({ brokers, brokerEditor, onSourceSelected }) {
   }
 
   const handleExpand = async (event) => {
-    console.log('handleExpand', event.node);
     const { node } = event;
     const { type, config } = node.data;
 
@@ -151,8 +150,7 @@ export default function TreeView({ brokers, brokerEditor, onSourceSelected }) {
   };
 
   const handleSelect = (event) => {
-    console.log('handleSelect', event.node.data);
-    if (event.node.data.type === 'queue' || event.node.data.type === 'topic') {
+    if (event.node.data.type === 'queue' || event.node.data.type === 'topic' || event.node.data.type === 'basic') {
       onSourceSelected?.(event.node.data);
     }
   };

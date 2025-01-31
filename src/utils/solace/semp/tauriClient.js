@@ -65,7 +65,7 @@ export class ApiClient {
       response: {}
     };
 
-    console.trace(`${httpMethod} ${url}`, args);
+    console.debug(`${httpMethod} ${url}`, args);
     const { username, password } = this.authentications.basicAuth;
 
     const resp = await fetch(urlParams.size ? `${url}?${urlParams}` : url, {
