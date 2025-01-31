@@ -251,6 +251,47 @@ class BaseBrowser {
     }
   }
 
+  async getReplayTimeRange() {
+    if(!this.replayLogName) {
+      return { max: null, min: null };
+    }
+    try {
+      const minMaxSpooledTime = await Promise.all([
+        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${this.replayLogName}</name>`,
+            `<vpn-name>${this.vpn}</vpn-name>`,
+            `<messages/><oldest/>`,
+            `<msg-id>${MIN_MSG_ID}</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [{ spooledTime }] }) => ['min', spooledTime]).catch(() => ['min', null]),
+        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${this.replayLogName}</name>`,
+            `<vpn-name>${this.vpn}</vpn-name>`,
+            `<messages/><newest/>`,
+            `<msg-id>${MAX_MSG_ID}</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [{ spooledTime }] }) => ['max', spooledTime]).catch(() => ['max', null]),
+      ]);
+      return Object.fromEntries(minMaxSpooledTime);
+    } catch (ex) {
+      return { min: null, max: null };
+    }
+  }
+
   merge({ messages, msgMetaData }) {
     const messageIdx = new Map(msgMetaData.map(meta => ([meta.replicationGroupMsgId, { meta }])));
     messages.forEach(msg => {
@@ -317,44 +358,6 @@ class LoggedMessagesReplayBrowser extends BaseBrowser {
     this.prevPages.push({ fromMsgId });
 
     return this.merge({ messages, msgMetaData });
-  }
-
-  async getMinMaxFromTime() {
-    try {
-      const minMaxSpooledTime = await Promise.all([
-        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${this.replayLogName}</name>`,
-            `<vpn-name>${this.vpn}</vpn-name>`,
-            `<messages/><oldest/>`,
-            `<msg-id>${MIN_MSG_ID}</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [{ spooledTime }] }) => ['min', spooledTime]).catch(() => ['min', null]),
-        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${this.replayLogName}</name>`,
-            `<vpn-name>${this.vpn}</vpn-name>`,
-            `<messages/><newest/>`,
-            `<msg-id>${MAX_MSG_ID}</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [{ spooledTime }] }) => ['max', spooledTime]).catch(() => ['max', null]),
-      ]);
-      return Object.fromEntries(minMaxSpooledTime);
-    } catch (ex) {
-      return { min: null, max: null };
-    }
   }
 }
 

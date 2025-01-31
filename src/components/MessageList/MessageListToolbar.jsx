@@ -11,7 +11,7 @@ import { SOURCE_TYPE, BROWSE_MODE, SUPPORTED_BROWSE_MODES, MESSAGE_ORDER } from 
 
 import classes from './styles.module.css';
 
-export default function MessageListToolbar({ sourceDefinition, onChange }) {
+export default function MessageListToolbar({ sourceDefinition, minTime, maxTime, onChange }) {
   const { type: sourceType, sourceName, config: { id: brokerId } } = sourceDefinition;
 
   const [sourceLabel, browseModes] =
@@ -36,9 +36,10 @@ export default function MessageListToolbar({ sourceDefinition, onChange }) {
       ]
     ];
 
+  const [minDate, maxDate] = [new Date(minTime * 1000), new Date(maxTime * 1000)];
+
   const [browseMode, setBrowseMode] = useState(browseModes[0].value);
   const [calendarVisible, setCalendarVisible] = useState(false);
-  const [calendarMinMax, setCalendarMinMax] = useState({});
 
   // Browse Start Points
   const [basicMode, setBasicMode] = useState(false);
@@ -115,11 +116,6 @@ export default function MessageListToolbar({ sourceDefinition, onChange }) {
     if (calendarVisible) {
       setCalendarVisible(false);
     } else {
-      //const { min, max } = await browser?.getMinMaxFromTime();
-      setCalendarMinMax({
-        min: new Date('1/1/2024'), // new Date(min * 1000),
-        max: new Date('1/1/2026') // new Date(max * 1000)
-      });
       setCalendarVisible(true);
     }
   };
@@ -159,7 +155,7 @@ export default function MessageListToolbar({ sourceDefinition, onChange }) {
                   <InputText placeholder="ID or RGMID" value={msgId} onChange={handleMsgIdTextChange} /> :
                   (browseMode === BROWSE_MODE.TIME) ?
                     <Calendar placeholder="Beginning of log" visible={calendarVisible} value={dateTime} showTime
-                      onVisibleChange={handleCalendarVisibleChangle} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max}
+                      onVisibleChange={handleCalendarVisibleChangle} onChange={handleCalendarChange} minDate={minDate} maxDate={maxDate}
                     /> :
                     <InputText disabled={true} placeholder="Invalid browse mode" />
           }

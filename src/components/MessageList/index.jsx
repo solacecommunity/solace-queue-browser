@@ -14,7 +14,7 @@ import classes from './styles.module.css';
 
 export default function MessageList({ sourceDefinition, browser, selectedMessage, onBrowseFromChange, onMessageSelect }) {
   const { sourceName } = sourceDefinition;
-
+  const [replayLogTimeRange, setReplayLogTimeRange] = useState({ });
   const [isLoading, setIsLoading] = useState(false);
   const [messages, setMessages] = useState([]);
   const [globalFilterValue, setGlobalFilterValue] = useState('');
@@ -34,6 +34,7 @@ export default function MessageList({ sourceDefinition, browser, selectedMessage
   };
 
   useEffect(() => {
+    browser.getReplayTimeRange().then(range => setReplayLogTimeRange(range));
     setMessages([]);
     loadMessages(() => browser.getFirstPage());
   }, [browser]);
@@ -107,7 +108,7 @@ export default function MessageList({ sourceDefinition, browser, selectedMessage
   return (
     (sourceName) ? (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-        <MessageListToolbar sourceDefinition={sourceDefinition} onChange={onBrowseFromChange} />
+        <MessageListToolbar sourceDefinition={sourceDefinition} minTime={replayLogTimeRange.min} maxTime={replayLogTimeRange.max} onChange={onBrowseFromChange} />
         <div style={{ flex: '1', overflow: 'hidden' }}>
           <DataTable
             className={classes.messageListTable}
