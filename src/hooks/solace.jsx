@@ -411,6 +411,12 @@ class QueuedMessagesReplayBrowser extends BaseBrowser {
 }
 
 class BasicQueueBrowser extends BaseBrowser {
+  constructor({ sourceDefinition, sempApi, solclientFactory }) {
+    super({ sourceDefinition, sempApi, solclientFactory });
+
+    this.didReadMessages = false;
+  }
+
   async open() {
     const { sourceName: queueName } = this.sourceDefinition;
 
@@ -435,7 +441,7 @@ class BasicQueueBrowser extends BaseBrowser {
     this.session?.disconnect();
 
     this.assertState(BROWSER_STATE.CLOSING);
-    this.state = closed;
+    this.state = BROWSER_STATE.CLOSED;
   }
 
   async getPage() {
@@ -453,8 +459,18 @@ class BasicQueueBrowser extends BaseBrowser {
         direction: MESSAGE_ORDER.OLDEST,
         count: messages.length
       });
-
+    
+    this.didReadMessages = true;
     return this.merge({ messages, msgMetaData });
+  }
+
+  async getFirstPage() {
+    if(this.didReadMessages) {
+      await this.close();
+      await this.open();
+      this.didReadMessages = false;
+    }
+    return await this.getPage();
   }
 }
 
