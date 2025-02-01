@@ -2,97 +2,53 @@ import { useEffect, useState } from 'react';
 
 import { DataTable } from 'primereact/datatable';
 import { Column } from 'primereact/column';
-import { Calendar } from 'primereact/calendar';
 import { Button } from 'primereact/button';
-import { Toolbar } from 'primereact/toolbar';
 import { InputText } from 'primereact/inputtext';
 import { IconField } from 'primereact/iconfield';
 import { InputIcon } from 'primereact/inputicon';
-import { Dropdown } from 'primereact/dropdown';
 import { FilterMatchMode } from 'primereact/api';
 
-import { useQueueBrowser } from "../../hooks/solace";
+import MessageListToolbar from './MessageListToolbar';
 
 import classes from './styles.module.css';
 
-export default function MessageList({ sourceDefinition, selectedMessage, onMessageSelect }) {
-  const { sourceName, type } = sourceDefinition;
-  const sourceType = (type === 'queue') ? 'Queue' : 'Replay';
-
-  const browseModes = sourceType === 'Queue' ? [
-    { value: 'head', name: 'Queue Head' },
-    { value: 'time', name: 'Date / Time' },
-    { value: 'tail', name: 'Queue End' }
-  ] : [
-    { value: 'time', name: 'Date / Time' },
-  ];
-
-  const [browseMode, setBrowseMode] = useState(browseModes[0].value);
-  const [calendarVisible, setCalendarVisible] = useState(false);
-  const [calendarMinMax, setCalendarMinMax] = useState({});
-  const [dateTime, setDateTime] = useState(null);
-  const [startFrom, setStartFrom] = useState(null);
-
-  const browser = useQueueBrowser(sourceDefinition, startFrom);
-
+export default function MessageList({ sourceDefinition, browser, selectedMessage, onBrowseFromChange, onMessageSelect }) {
+  const { sourceName } = sourceDefinition;
+  const [replayLogTimeRange, setReplayLogTimeRange] = useState({ });
+  const [isLoading, setIsLoading] = useState(false);
+  const [messages, setMessages] = useState([]);
   const [globalFilterValue, setGlobalFilterValue] = useState('');
   const [filters, setFilters] = useState({
     global: { value: null, matchMode: FilterMatchMode.CONTAINS }
   });
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [messages, setMessages] = useState([]);
-
   const loadMessages = async (loader) => {
     setIsLoading(true);
-    setMessages(await loader());
+    try {
+      setMessages(await loader());
+    } catch (err) {
+      console.error('Error loding messages', err);
+      setMessages([]); // TODO: also show error toast notification?
+    }
     setIsLoading(false);
   };
 
   useEffect(() => {
+    browser.getReplayTimeRange().then(range => setReplayLogTimeRange(range));
     setMessages([]);
     loadMessages(() => browser.getFirstPage());
   }, [browser]);
 
-  useEffect(() => {
-    setBrowseMode(browseModes[0].value);
-  }, [sourceType]);
+  const handleRowSelection = (e) => {
+    if (e.value !== null) {
+      onMessageSelect?.(e.value);
+    }
+  };
 
-  const handleBrowseModeChange = (evt) => {
-    setBrowseMode(evt.value);
-    switch (evt.value) {
-      case 'head':
-        setDateTime(null);
-        setStartFrom({ head: true });
-        break;
-      case 'time':
-        setStartFrom({ fromTime: null });
-        break;
-      case 'tail':
-        setDateTime(null);
-        setStartFrom({ tail: true });
-        break;
-    }
-  };
-  const handleCalendarVisibleChangle = async () => {
-    if (calendarVisible) {
-      setCalendarVisible(false);
-    } else {
-      const { min, max } = await browser?.getMinMaxFromTime();
-      setCalendarMinMax({
-        min: new Date(min * 1000),
-        max: new Date(max * 1000)
-      });
-      setCalendarVisible(true);
-    }
-  };
-  const handleRefreshClick = () => {
-    try {
-      setStartFrom(dateTime ? { fromTime: Math.floor(Date.parse(dateTime) / 1000) } : null);
-    } catch {
-      console.error('Invalid date format');
-      setStartFrom(null);
-    }
+  const handleFilterChange = (e) => {
+    const value = e.target.value;
+    setFilters({ global: { ...filters.global, value } });
+    setGlobalFilterValue(value);
   };
 
   const handleFirstClick = () => {
@@ -107,22 +63,6 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     loadMessages(() => browser.getPrevPage());
   };
 
-  const handleCalendarChange = (e) => {
-    setDateTime(e.value);
-  };
-
-  const handleRowSelection = (e) => {
-    if (e.value !== null) {
-      onMessageSelect?.(e.value);
-    }
-  };
-
-  const handleFilterChange = (e) => {
-    const value = e.target.value;
-    setFilters({ global: { ...filters.global, value } });
-    setGlobalFilterValue(value);
-  };
-
   const messageStatus = (message) => {
     return message.payload !== undefined ? null : (
       <i className="pi pi-question-circle text-yellow-500"></i>
@@ -134,7 +74,6 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
     const tzOffset = new Date(spooledEpoc).getTimezoneOffset() * 60000;
     return new Date(spooledEpoc - tzOffset).toISOString().replace('T', ' ').slice(0, 19);
   }
-
 
   const addFilterField = (message) => ({
     ...message, filterField: [
@@ -169,16 +108,7 @@ export default function MessageList({ sourceDefinition, selectedMessage, onMessa
   return (
     (sourceName) ? (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
-        <Toolbar className={classes.messageListToolbar}
-          start={() => <h3>{sourceType} | {sourceName}</h3>}
-          end={() =>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <label>From:</label>
-              <Dropdown value={browseMode} onChange={handleBrowseModeChange} options={browseModes} optionLabel="name" />
-              <Calendar showTime visible={calendarVisible} onVisibleChange={handleCalendarVisibleChangle} value={dateTime} onChange={handleCalendarChange} minDate={calendarMinMax.min} maxDate={calendarMinMax.max} disabled={browseMode != 'time'} />
-              <Button onClick={handleRefreshClick} size="small" disabled={browseMode != 'time'}>Refresh</Button>
-            </div>}
-        />
+        <MessageListToolbar sourceDefinition={sourceDefinition} minTime={replayLogTimeRange.min} maxTime={replayLogTimeRange.max} onChange={onBrowseFromChange} />
         <div style={{ flex: '1', overflow: 'hidden' }}>
           <DataTable
             className={classes.messageListTable}

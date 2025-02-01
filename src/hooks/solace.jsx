@@ -1,474 +1,187 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import solace from '../utils/solace/solclientasync';
 
 import { useSempApi } from "../providers/SempClientProvider";
 
-class NullBrowser {
-  getMessages() { return []; }
-  getFirstPage() { return []; }
-  getNextPage() { return []; }
-  getPrevPage() { return []; }
-  hasNextPage() { return false; }
-  hasPrevPage() { return false; }
-  close() { }
+const PAGE_SIZE = 100;
+const MIN_MSG_ID = 1n;
+const MAX_MSG_ID = 9223372036854775808n;
+
+export const SOURCE_TYPE = {
+  BASIC: 'basic',
+  QUEUE: 'queue',
+  TOPIC: 'topic'
+};
+
+export const BROWSE_MODE = {
+  BASIC: 'basic',
+  HEAD: 'head',
+  TAIL: 'tail',
+  TIME: 'time',
+  MSGID: 'msgid'
+};
+
+export const SUPPORTED_BROWSE_MODES = {
+  [SOURCE_TYPE.BASIC]: [
+    BROWSE_MODE.BASIC
+  ],
+  [SOURCE_TYPE.QUEUE]: [
+    BROWSE_MODE.BASIC,
+    BROWSE_MODE.HEAD,
+    BROWSE_MODE.TAIL,
+    BROWSE_MODE.TIME,
+    BROWSE_MODE.MSGID
+  ],
+  [SOURCE_TYPE.TOPIC]: [
+    BROWSE_MODE.TIME,
+    BROWSE_MODE.MSGID
+  ]
 }
 
-class ReplayQueueBrowser {
-  constructor(sourceDefinition, startFrom, sempApi, solclientFactory) {    
+export const MESSAGE_ORDER = {
+  OLDEST: 'oldest',   // Forward Browsing
+  NEWEST: 'newest'    // Reverse Browsing
+};
+
+const BROWSER_STATE = {
+  CLOSED: 'closed',
+  OPENING: 'opening',
+  OPEN: 'open',
+  CLOSING: 'closing'
+};
+ 
+class BaseBrowser {
+  constructor({ sourceDefinition, startFrom, sempApi, solclientFactory } = {}) {
+    this.instanceId = `${this.constructor.name} ${Math.random().toString().substring(2,6)}`;
+    // Specific browser instance behavior
     this.sourceDefinition = sourceDefinition;
     this.startFrom = startFrom;
 
-    const { config } = sourceDefinition;
-    this.sempClient = sempApi.getClient(config);
+    // Core API
+    this.sempApi = sempApi;
+    this.solclientFactory = solclientFactory;
 
+    // Defined in open()
+    this.vpn = undefined;
+    this.sempClient = undefined;
+    this.session = undefined;
+    this.replayLogName = undefined;
+    this.topics = undefined;
+
+    // Page management
+    this.nextPage = null;
+    this.prevPages = [];
+    this.pageSize = PAGE_SIZE;
+
+    this.state = BROWSER_STATE.CLOSED;
+  }
+
+  async open() {
+    this.assertState(BROWSER_STATE.CLOSED);
+    this.state = BROWSER_STATE.OPENING;
+
+    const { sourceName, config, topics } = this.sourceDefinition || {};
     const {
       hostName, clientPort, useTls, vpn,
       clientUsername, clientPassword
-    } = config;
+    } = config || {};
 
-    this.solclientFactory = solclientFactory;
-    this.session = solclientFactory.createAsyncSession({
-      url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
-      vpnName: vpn,
-      userName: clientUsername,
-      password: clientPassword
-    });
+    this.vpn = vpn;
 
-    this.replayPages = [];
-    this.lastRgmid = '';
-    this.hasNext = false;
-  }
-
-  async getMessages({ count = 50, replayFrom = this.startFrom } = {}) {
-    const { sourceName: queueName, config: { vpn }} = this.sourceDefinition;
-
-    if (!queueName) {
-      return [];
+    if (this.sempApi) {
+      this.sempClient = this.sempApi?.getClient(config);
     }
 
-    const timeStart = () => console.time('getMessages');
-    const timeLog = (message) => console.timeLog('getMessages', message);
-    const timeEnd = () => console.timeEnd('getMessages');
-
-    timeStart();
-    timeLog('starting browser');
-
-    const [{ data: queue }, { data: subscriptions }] = await Promise.all([
-      this.sempClient.getMsgVpnQueue(vpn, queueName),
-      this.sempClient.getMsgVpnQueueSubscriptions(vpn, queueName),
-      this.session.connect()
-    ]);
-
-    if (!replayFrom && queue.lowestMsgId) {
-      // check if lowestMsgId is on the replay log at all
-      replayFrom = await this.#getQueueReplayFrom(queue);
-    }
-
-    timeLog('connected to broker');
-
-    const queueTopic = queue.networkTopic;
-    const tempQueueName = `#QB/${queueName}/${Date.now()}`;
-    const queueDescriptor = { name: tempQueueName, type: solace.QueueType.QUEUE };
-
-    await this.session.provisionEndpoint(queueDescriptor, {}, true);
-    timeLog('queue created');
-
-    const messageConsumer = this.session.createMessageConsumer({
-      queueDescriptor,
-      acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
-      windowSize: 1,
-      replayStartLocation:
-        replayFrom?.afterMsg ? this.solclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
-          replayFrom?.fromTime ? this.solclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
-            replayFrom ? this.solclientFactory.createReplayStartLocationBeginning() :
-              null
-    });
-
-    
-    await Promise.all([
-      messageConsumer.addSubscription(
-        this.solclientFactory.createTopicDestination(queueTopic),
-        queueTopic,
-        2000
-      ),
-      ...subscriptions.map(s => (
-        messageConsumer.addSubscription(
-          this.solclientFactory.createTopicDestination(s.subscriptionTopic),
-          s.subscriptionTopic,
-          2000
-        )
-      )),
-    ]);
-    
-    timeLog('triggering replay on consumer');
-    messageConsumer.connect();
-    messageConsumer.disconnect();
-    
-    const queueBrowser = this.session.createQueueBrowser({ queueDescriptor });
-    const [, messages] = await Promise.all([
-      queueBrowser.connect(),
-      queueBrowser.readMessages(count, 500)
-    ]);
-    queueBrowser.disconnect();
-
-    timeLog('getting metadata');
-    const { data: msgMetaData } = await this.sempClient.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
-
-    timeLog('disconnecting browser');
-    this.session.deprovisionEndpoint(queueDescriptor);
-    this.session.disconnect();
-
-    timeEnd();
-
-    this.replayPages.push(replayFrom);
-    this.lastRgmid = messages[messages.length - 1]?.getReplicationGroupMessageId().toString();
-    this.hasNext = msgMetaData[msgMetaData.length - 1]?.msgId < queue.highestMsgId;
-
-    return messages.map((msg, n) => ({
-      meta: msgMetaData[n],
-      payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
-      headers: {
-        destination: msg.getDestination().getName(),
-        replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
-        guaranteedMessageId: msg.getGuaranteedMessageId()?.low,
-        applicationMessageId: msg.getApplicationMessageId(),
-        applicationMessageType: msg.getApplicationMessageType(),
-        correlationId: msg.getCorrelationId(),
-        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
-        replyTo: msg.getReplyTo(),
-        senderId: msg.getSenderId(),
-        senderTimestamp: msg.getSenderTimestamp(),
-        sequenceNumber: msg.getSequenceNumber()
-      },
-      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
-        return [key, msg.getUserPropertyMap().getField(key).getValue()]
-      }))
-    }));
-  }
-  getFirstPage() {
-    this.replayPages.length = 0;
-    return this.getMessages();
-  }
-  getNextPage() {
-    return this.getMessages({ replayFrom: { afterMsg: this.lastRgmid } });
-  }
-  getPrevPage() {
-    this.replayPages.pop();
-    return this.getMessages({ replayFrom: this.replayPages.pop() });
-  }
-  hasNextPage() {
-    return this.hasNext;
-  }
-  hasPrevPage() {
-    return this.replayPages.length > 1;
-  }
-  close() {
-  }
-  async getMinMaxFromTime() {
-    const { config: { vpn } } = this.sourceDefinition;
-
-    try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
-
-      const minMaxSpooledTime = await Promise.all([
-        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${replayLogName}</name>`,
-            `<vpn-name>${vpn}</vpn-name>`,
-            `<messages/><oldest/>`,
-            `<msg-id>1</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [ { spooledTime } ] }) => ['min', spooledTime]).catch(() => ['min', null]),
-        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${replayLogName}</name>`,
-            `<vpn-name>${vpn}</vpn-name>`,
-            `<messages/><newest/>`,
-            `<msg-id>9223372036854775808</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [ { spooledTime } ] }) => ['max', spooledTime]).catch(() => ['max', null]),
-      ]);
-      return Object.fromEntries(minMaxSpooledTime);
-    } catch (ex) {
-      return { min: null, max: null};
-    }
-  }
-  async #getQueueReplayFrom({ lowestMsgId }) {
-    const { config: { vpn } } = this.sourceDefinition;
-    try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
-
-      const prevMessages = await this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-        cursor: [
-          `<rpc><show><replay-log>`,
-          `<name>${replayLogName}</name>`,
-          `<vpn-name>${vpn}</vpn-name>`,
-          `<messages/><newest/>`,
-          `<msg-id>${lowestMsgId}</msg-id>`,
-          `<detail/>`,
-          `<num-elements>2</num-elements>`,
-          `</replay-log></show></rpc>`,
-        ].join(''),
-        select: ['replicationGroupMsgId'],
-        count: 2
+    if (this.solclientFactory) {
+      this.session = this.solclientFactory.createAsyncSession({
+        url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
+        vpnName: this.vpn,
+        userName: clientUsername,
+        password: clientPassword
       });
+    }
 
-      return { afterMsg: prevMessages.data[1].replicationGroupMsgId };
-    } catch (ex) {
-      console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning.', ex);
-      return {};
+    const { data: [{ replayLogName } = {}] } = await this.sempClient.getMsgVpnReplayLogs(this.vpn, { select: ['replayLogName'] });
+    this.replayLogName = replayLogName;
+
+    this.assertState(BROWSER_STATE.OPENING);
+
+    if (topics) {
+      this.topics = topics;
+    } else {
+      const { data: { networkTopic } } = await this.sempClient.getMsgVpnQueue(this.vpn, sourceName, { select: ['networkTopic'] });
+      const { data: subscriptions } = await this.sempClient.getMsgVpnQueueSubscriptions(this.vpn, sourceName);
+
+      this.topics = [
+        networkTopic,
+        ...subscriptions.map(s => s.subscriptionTopic)
+      ];
+    }
+
+    this.assertState(BROWSER_STATE.OPENING);
+    this.state = BROWSER_STATE.OPEN;
+  }
+
+  async close() { 
+    this.state = BROWSER_STATE.CLOSED;
+    this.assertState(BROWSER_STATE.CLOSED);
+  }
+
+
+  assertState(state) {
+    if(this.state !== state) {
+      throw new Error(`[${this.instanceId}] Invalid state: expected '${state}', current value '${this.state}'`);
     }
   }
-}
 
-class ReplayTopicBrowser {
-  constructor(sourceDefinition, startFrom, sempApi, solclientFactory) {
-    this.sourceDefinition = sourceDefinition;
-    this.startFrom = startFrom;
-
-    const { config } = sourceDefinition;
-    this.sempClient = sempApi.getClient(config);
-
-    const {
-      hostName, clientPort, useTls, vpn,
-      clientUsername, clientPassword
-    } = config;
-
-    this.solclientFactory = solclientFactory;
-    this.session = solclientFactory.createAsyncSession({
-      url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
-      vpnName: vpn,
-      userName: clientUsername,
-      password: clientPassword
-    });
-
-    this.replayPages = [];
-    this.lastRgmid = '';
-    this.hasNext = false;
-  }
-
-  async getMessages({ count = 50, replayFrom = this.startFrom } = {}) {
-    const { sourceName: subscriptionName, topics, config: { vpn }} = this.sourceDefinition;
-
-    const timeStart = () => console.time('ReplayTopicBrowser:getMessages');
-    const timeLog = (message, ...rest) => console.timeLog('ReplayTopicBrowser:getMessages', message, ...rest);
-    const timeEnd = () => console.timeEnd('ReplayTopicBrowser:getMessages');
-
-    timeStart();
-    timeLog('starting browser');
-
-    await this.session.connect();
-
-    timeLog('connected to broker');
-
-    const tempQueueName = `#QB/${subscriptionName}/${Date.now()}`;
-    const queueDescriptor = { name: tempQueueName, type: solace.QueueType.QUEUE };
-
-    await this.session.provisionEndpoint(queueDescriptor, {}, true);
-    timeLog('queue created', replayFrom);
-
-    const messageConsumer = this.session.createMessageConsumer({
-      queueDescriptor,
-      acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
-      windowSize: 1,
-      replayStartLocation: 
-        replayFrom?.afterMsg ? this.solclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
-        replayFrom?.fromTime ? this.solclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
-        this.solclientFactory.createReplayStartLocationBeginning()
-    });
-
-    
-    await Promise.all([
-      ...topics.map(topic => (
-        messageConsumer.addSubscription(
-          this.solclientFactory.createTopicDestination(topic),
-          topic,
-          2000
-        )
-      )),
-    ]);
-    
-    timeLog('triggering replay on consumer');
-    messageConsumer.connect();
-    messageConsumer.disconnect();
-    
-    const queueBrowser = this.session.createQueueBrowser({ queueDescriptor });
-    const [, messages] = await Promise.all([
-      queueBrowser.connect(),
-      queueBrowser.readMessages(count, 500)
-    ]);
-    queueBrowser.disconnect();
-    
-    timeLog(`got ${messages.length} messages, getting metadata`);
-    const { data: msgMetaData } = await this.sempClient.getMsgVpnQueueMsgs(vpn, tempQueueName, { count });
-    
-    timeLog(`got metadata for ${msgMetaData.length} messages, disconnecting browser`);
-    this.session.deprovisionEndpoint(queueDescriptor);
-    this.session.disconnect();
-
-    timeEnd();
-
-    this.replayPages.push(replayFrom);
-    this.lastRgmid = messages[messages.length - 1]?.getReplicationGroupMessageId().toString();
-    this.hasNext = true; // TODO: compare last message ID vs lowest message ID on replay log
-
-    const result = messages.map((msg, n) => ({
-      meta: msgMetaData[n],
-      payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
-      headers: {
-        destination: msg.getDestination().getName(),
-        replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
-        guaranteedMessageId: msg.getGuaranteedMessageId()?.low,
-        applicationMessageId: msg.getApplicationMessageId(),
-        applicationMessageType: msg.getApplicationMessageType(),
-        correlationId: msg.getCorrelationId(),
-        deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
-        replyTo: msg.getReplyTo(),
-        senderId: msg.getSenderId(),
-        senderTimestamp: msg.getSenderTimestamp(),
-        sequenceNumber: msg.getSequenceNumber()
-      },
-      userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
-        return [key, msg.getUserPropertyMap().getField(key).getValue()]
-      }))
-    }));
-
-    return result;
-  }
   getFirstPage() {
-    this.replayPages.length = 0;
-    return this.getMessages();
+    this.prevPages.length = 0;
+    return this.getPage(this.startFrom);
   }
+
   getNextPage() {
-    return this.getMessages({ replayFrom: { afterMsg: this.lastRgmid } });
+    return this.getPage(this.nextPage);
   }
+
   getPrevPage() {
-    this.replayPages.pop();
-    return this.getMessages({ replayFrom: this.replayPages.pop() });
+    this.prevPages.pop();
+    return this.getPage(this.prevPages.pop())
   }
+
   hasNextPage() {
-    return this.hasNext;
+    return (this.nextPage !== null);
   }
+
   hasPrevPage() {
-    return this.replayPages.length > 1;
-  }
-  close() {
-  }
-  async getMinMaxFromTime() {
-    const { vpn } = this.queueDefinition;
-
-    try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
-
-      const minMaxSpooledTime = await Promise.all([
-        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${replayLogName}</name>`,
-            `<vpn-name>${vpn}</vpn-name>`,
-            `<messages/><oldest/>`,
-            `<msg-id>1</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [ { spooledTime } ] }) => ['min', spooledTime]).catch(() => ['min', null]),
-        this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-          cursor: [
-            `<rpc><show><replay-log>`,
-            `<name>${replayLogName}</name>`,
-            `<vpn-name>${vpn}</vpn-name>`,
-            `<messages/><newest/>`,
-            `<msg-id>9223372036854775808</msg-id>`,
-            `<detail/>`,
-            `<num-elements>1</num-elements>`,
-            `</replay-log></show></rpc>`,
-          ].join(''),
-          select: ['spooledTime'],
-          count: 1
-        }).then(({ data: [ { spooledTime } ] }) => ['max', spooledTime]).catch(() => ['max', null]),
-      ]);
-      return Object.fromEntries(minMaxSpooledTime);
-    } catch (ex) {
-      return { min: null, max: null};
-    }
-  }
-}
-class ForwardQueueBrowser {
-  static #MIN_MSG_ID = 1n;
-
-  constructor(sourceDefinition, startFrom, sempApi, solclientFactory) {
-    this.sourceDefinition = sourceDefinition;
-    this.startFrom = startFrom;
-
-    const { config } = sourceDefinition;
-    this.sempClient = sempApi.getClient(config);
-
-    const {
-      hostName, clientPort, useTls, vpn,
-      clientUsername, clientPassword
-    } = config;
-
-    this.solclientFactory = solclientFactory;
-    this.session = solclientFactory.createAsyncSession({
-      url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
-      vpnName: vpn,
-      userName: clientUsername,
-      password: clientPassword
-    });
-
-    this.msgIdPages = [];
-    this.oldestMsgId = ForwardQueueBrowser.#MIN_MSG_ID;
-    this.hasNext = false;
+    return (this.prevPages.length > 1);
   }
 
-  async getMessages({ count = 50, fromMsgId = ForwardQueueBrowser.#MIN_MSG_ID } = {}) {
-    const { sourceName: queueName, config: { vpn }} = this.sourceDefinition;
-    const { data: queue } = await this.sempClient.getMsgVpnQueue(vpn, queueName);
-    const { data: msgMetaData } = await this.sempClient.getMsgVpnQueueMsgs(vpn, queueName, {
-      cursor: [
-        `<rpc><show><queue>`,
-        `<name>${queueName}</name>`,
-        `<vpn-name>${vpn}</vpn-name>`,
-        `<messages/><oldest/>`,
-        `<msg-id>${fromMsgId}</msg-id>`,
-        `<detail/><count/>`,
-        `<num-elements>${count}</num-elements>`,
-        `</queue></show></rpc>`
-      ].join(''),
-      count 
-    });
+  async getPage(page) {
+    return [];
+  }
 
-    if(msgMetaData.length === 0) {
-      return [];
-    }
+  async getMessageMetaData({ queueName, fromMsgId = null, direction, count = this.pageSize }) {
+    const cursor = (fromMsgId !== null) ? [
+      `<rpc><show><queue>`,
+      `<name>${queueName}</name>`,
+      `<vpn-name>${this.vpn}</vpn-name>`,
+      `<messages/><${direction}/>`,
+      `<msg-id>${fromMsgId}</msg-id>`,
+      `<detail/><count/>`,
+      `<num-elements>${count}</num-elements>`,
+      `</queue></show></rpc>`
+    ].join('') : undefined;
 
-    const lowestMsgId = msgMetaData[0].msgId;
-    const highestMsgId = msgMetaData[msgMetaData.length - 1].msgId;
-    const replayFrom = await this.#getQueueReplayFrom({ lowestMsgId });
+    const { data: msgMetaData } = await this.sempClient
+      .getMsgVpnQueueMsgs(this.vpn, queueName, { cursor, count });
 
-    const { data: subscriptions } = await this.sempClient.getMsgVpnQueueSubscriptions(vpn, queueName);
+    return msgMetaData;
+  }
+
+  async replayToTempQueue({ sourceName, replayFrom, count = this.pageSize}) {
     await this.session.connect();
 
-    const queueTopic = queue.networkTopic;
-    const tempQueueName = `#QB/${queueName}/${Date.now()}`;
+    const tempQueueName = `#QB/${sourceName}/${Date.now()}`;
     const queueDescriptor = { name: tempQueueName, type: solace.QueueType.QUEUE };
 
     await this.session.provisionEndpoint(queueDescriptor, {}, true);
@@ -484,24 +197,18 @@ class ForwardQueueBrowser {
               null
     });
 
-    await Promise.all([
+    await Promise.all(this.topics.map(topic => (
       messageConsumer.addSubscription(
-        this.solclientFactory.createTopicDestination(queueTopic),
-        queueTopic,
+        this.solclientFactory.createTopicDestination(topic),
+        topic,
         2000
-      ),
-      ...subscriptions.map(s => (
-        messageConsumer.addSubscription(
-          this.solclientFactory.createTopicDestination(s.subscriptionTopic),
-          s.subscriptionTopic,
-          2000
-        )
-      ))
-    ]);
-    
+      )))
+    );
+
+    // Trigger Replay
     messageConsumer.connect();
     messageConsumer.disconnect();
-    
+
     const queueBrowser = this.session.createQueueBrowser({ queueDescriptor });
     const [, messages] = await Promise.all([
       queueBrowser.connect(),
@@ -509,190 +216,84 @@ class ForwardQueueBrowser {
     ]);
     queueBrowser.disconnect();
 
-    this.session.deprovisionEndpoint(queueDescriptor);
-    this.session.disconnect();
-
-    const messageIdx = new Map(msgMetaData.map(meta => ([ meta.replicationGroupMsgId, { meta } ])));
-
-    messages.forEach(msg => {
-      const msgObj = {
-        payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
-        headers: {
-          destination: msg.getDestination().getName(),
-          replicationGroupMsgId: msg.getReplicationGroupMessageId().toString(),
-          guaranteedMessageId: msg.getGuaranteedMessageId()?.low,
-          applicationMessageId: msg.getApplicationMessageId(),
-          applicationMessageType: msg.getApplicationMessageType(),
-          correlationId: msg.getCorrelationId(),
-          deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
-          replyTo: msg.getReplyTo(),
-          senderId: msg.getSenderId(),
-          senderTimestamp: msg.getSenderTimestamp(),
-          sequenceNumber: msg.getSequenceNumber()
-        },
-        userProperties: Object.fromEntries((msg.getUserPropertyMap()?.getKeys() || []).map(key => {
-          return [key, msg.getUserPropertyMap().getField(key).getValue()]
-        }))
-      };
-      const metaData = messageIdx.get(msgObj.headers.replicationGroupMsgId);
-      if(metaData) {
-        Object.assign(metaData, msgObj);
+    return {
+      messages,
+      tempQueueName,
+      cleanupReplay: () => {
+        this.session.deprovisionEndpoint(queueDescriptor);
+        this.session.disconnect();
       }
-    });
+    };
+  }
 
-    this.oldestMsgId = highestMsgId + 1;
-    this.hasNext = highestMsgId < queue.highestMsgId;
-    this.msgIdPages.push(fromMsgId);
-
-    return [ ...messageIdx.values() ];
-  }
-  getFirstPage() {
-    this.msgIdPages.length = 0;
-    return this.getMessages();
-  }
-  getNextPage() { 
-    return this.getMessages( { fromMsgId: this.oldestMsgId });
-  }
-  getPrevPage() {
-    this.msgIdPages.pop();
-    return this.getMessages( { fromMsgId: this.msgIdPages.pop() });
-  }
-  hasNextPage() { return this.hasNext; }
-  hasPrevPage() { return this.msgIdPages.length > 1; }
-  close() { }
-
-  async #getQueueReplayFrom({ lowestMsgId }) {
-    const { config: { vpn } } = this.sourceDefinition;
+  async getQueueReplayFrom({ messageId }) {
     try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
-
-      const prevMessages = await this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-        cursor: [
-          `<rpc><show><replay-log>`,
-          `<name>${replayLogName}</name>`,
-          `<vpn-name>${vpn}</vpn-name>`,
-          `<messages/><newest/>`,
-          `<msg-id>${lowestMsgId}</msg-id>`,
-          `<detail/>`,
-          `<num-elements>2</num-elements>`,
-          `</replay-log></show></rpc>`,
-        ].join(''),
-        select: ['replicationGroupMsgId'],
-        count: 2
-      });
-
-      return { afterMsg: prevMessages.data[1].replicationGroupMsgId };
-    } catch (ex) {
-      console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning.', ex);
-      return {};
-    }
-  }
-}
-
-class ReverseQueueBrowser {
-  static #MAX_MSG_ID = 9223372036854775808n;
-
-  constructor(sourceDefinition, startFrom, sempApi, solclientFactory) {
-    this.sourceDefinition = sourceDefinition;
-    this.startFrom = startFrom;
-
-    const { config } = sourceDefinition;
-    this.sempClient = sempApi.getClient(config);
-
-    const {
-      hostName, clientPort, useTls, vpn,
-      clientUsername, clientPassword
-    } = config;
-
-    this.solclientFactory = solclientFactory;
-    this.session = solclientFactory.createAsyncSession({
-      url: `${(useTls ? 'wss' : 'ws')}://${hostName}:${clientPort}`,
-      vpnName: vpn,
-      userName: clientUsername,
-      password: clientPassword
-    });
-
-    this.msgIdPages = [];
-    this.oldestMsgId = ReverseQueueBrowser.#MAX_MSG_ID;
-    this.hasNext = false;
-  }
-
-  async getMessages({ count = 50, fromMsgId = ReverseQueueBrowser.#MAX_MSG_ID } = {}) {
-    const { sourceName: queueName, config: { vpn }} = this.sourceDefinition;
-    const { data: queue } = await this.sempClient.getMsgVpnQueue(vpn, queueName);
-    const { data: msgMetaData } = await this.sempClient.getMsgVpnQueueMsgs(vpn, queueName, {
-      cursor: [
-        `<rpc><show><queue>`,
-        `<name>${queueName}</name>`,
-        `<vpn-name>${vpn}</vpn-name>`,
+      const cursor = [
+        `<rpc><show><replay-log>`,
+        `<name>${this.replayLogName}</name>`,
+        `<vpn-name>${this.vpn}</vpn-name>`,
         `<messages/><newest/>`,
-        `<msg-id>${fromMsgId}</msg-id>`,
-        `<detail/><count/>`,
-        `<num-elements>${count}</num-elements>`,
-        `</queue></show></rpc>`
-      ].join(''),
-      count 
-    });
+        `<msg-id>${messageId}</msg-id>`,
+        `<detail/>`,
+        `<num-elements>2</num-elements>`,
+        `</replay-log></show></rpc>`,
+      ].join('');
 
-    if(msgMetaData.length === 0) {
-      return [];
+      const { data: msgMetaData } = await this.sempClient
+        .getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, { cursor, count: 2 });
+      const [, nextOldestMessage] = msgMetaData;
+      return ({
+        afterMsg: nextOldestMessage.replicationGroupMsgId
+      });
+    } catch (ex) {
+      console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning of time.', ex);
+      return {};
     }
+  }
 
-    const lowestMsgId = msgMetaData[msgMetaData.length - 1].msgId;
-    const replayFrom = await this.#getQueueReplayFrom({ lowestMsgId });
+  async getReplayTimeRange() {
+    if(!this.replayLogName) {
+      return { max: null, min: null };
+    }
+    try {
+      const minMaxSpooledTime = await Promise.all([
+        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${this.replayLogName}</name>`,
+            `<vpn-name>${this.vpn}</vpn-name>`,
+            `<messages/><oldest/>`,
+            `<msg-id>${MIN_MSG_ID}</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [{ spooledTime }] }) => ['min', spooledTime]).catch(() => ['min', null]),
+        this.sempClient.getMsgVpnReplayLogMsgs(this.vpn, this.replayLogName, {
+          cursor: [
+            `<rpc><show><replay-log>`,
+            `<name>${this.replayLogName}</name>`,
+            `<vpn-name>${this.vpn}</vpn-name>`,
+            `<messages/><newest/>`,
+            `<msg-id>${MAX_MSG_ID}</msg-id>`,
+            `<detail/>`,
+            `<num-elements>1</num-elements>`,
+            `</replay-log></show></rpc>`,
+          ].join(''),
+          select: ['spooledTime'],
+          count: 1
+        }).then(({ data: [{ spooledTime }] }) => ['max', spooledTime]).catch(() => ['max', null]),
+      ]);
+      return Object.fromEntries(minMaxSpooledTime);
+    } catch (ex) {
+      return { min: null, max: null };
+    }
+  }
 
-    const { data: subscriptions } = await this.sempClient.getMsgVpnQueueSubscriptions(vpn, queueName);
-    await this.session.connect();
-
-    const queueTopic = queue.networkTopic;
-    const tempQueueName = `#QB/${queueName}/${Date.now()}`;
-    const queueDescriptor = { name: tempQueueName, type: solace.QueueType.QUEUE };
-
-    await this.session.provisionEndpoint(queueDescriptor, {}, true);
-
-    const messageConsumer = this.session.createMessageConsumer({
-      queueDescriptor,
-      acknowledgeMode: solace.MessageConsumerAcknowledgeMode.CLIENT,
-      windowSize: 1,
-      replayStartLocation:
-        replayFrom?.afterMsg ? this.solclientFactory.createReplicationGroupMessageId(replayFrom.afterMsg) :
-          replayFrom?.fromTime ? this.solclientFactory.createReplayStartLocationDate(new Date(replayFrom.fromTime * 1000)) :
-            replayFrom ? this.solclientFactory.createReplayStartLocationBeginning() :
-              null
-    });
-
-    
-    await Promise.all([
-      messageConsumer.addSubscription(
-        this.solclientFactory.createTopicDestination(queueTopic),
-        queueTopic,
-        2000
-      ),
-      ...subscriptions.map(s => (
-        messageConsumer.addSubscription(
-          this.solclientFactory.createTopicDestination(s.subscriptionTopic),
-          s.subscriptionTopic,
-          2000
-        )
-      )),
-    ]);
-    
-    messageConsumer.connect();
-    messageConsumer.disconnect();
-    
-    const queueBrowser = this.session.createQueueBrowser({ queueDescriptor });
-    const [, messages] = await Promise.all([
-      queueBrowser.connect(),
-      queueBrowser.readMessages(count, 500)
-    ]);
-    queueBrowser.disconnect();
-    
-    this.session.deprovisionEndpoint(queueDescriptor);
-    this.session.disconnect();
-
-    const messageIdx = new Map(msgMetaData.map(meta => ([ meta.replicationGroupMsgId, { meta } ])));
-
+  merge({ messages, msgMetaData }) {
+    const messageIdx = new Map(msgMetaData.map(meta => ([meta.replicationGroupMsgId, { meta }])));
     messages.forEach(msg => {
       const msgObj = {
         payload: msg.getSdtContainer()?.getValue() || msg.getBinaryAttachment().toString(),
@@ -703,7 +304,7 @@ class ReverseQueueBrowser {
           applicationMessageId: msg.getApplicationMessageId(),
           applicationMessageType: msg.getApplicationMessageType(),
           correlationId: msg.getCorrelationId(),
-          deliveryMode: ['Direct','Persistent','Non-Persistent'][msg.getDeliveryMode()],
+          deliveryMode: ['Direct', 'Persistent', 'Non-Persistent'][msg.getDeliveryMode()],
           replyTo: msg.getReplyTo(),
           senderId: msg.getSenderId(),
           senderTimestamp: msg.getSenderTimestamp(),
@@ -714,86 +315,202 @@ class ReverseQueueBrowser {
         }))
       };
       const metaData = messageIdx.get(msgObj.headers.replicationGroupMsgId);
-      if(metaData) {
+      if (metaData) {
         Object.assign(metaData, msgObj);
       }
     });
-
-    this.oldestMsgId = lowestMsgId - 1;
-    this.hasNext = lowestMsgId > queue.lowestMsgId;
-    this.msgIdPages.push(fromMsgId);
-
-    return [ ...messageIdx.values() ];
+    return [...messageIdx.values()];
   }
-  getFirstPage() {
-    this.msgIdPages.length = 0;
-    return this.getMessages();
-  }
-  getNextPage() { 
-    return this.getMessages( { fromMsgId: this.oldestMsgId });
-  }
-  getPrevPage() {
-    this.msgIdPages.pop();
-    return this.getMessages( { fromMsgId: this.msgIdPages.pop() });
-  }
-  hasNextPage() { return this.hasNext; }
-  hasPrevPage() { return this.msgIdPages.length > 1; }
-  close() { }
+}
 
-  async #getQueueReplayFrom({ lowestMsgId }) {
-    const { config: { vpn } } = this.sourceDefinition;
-    try {
-      const replayLogs = await this.sempClient.getMsgVpnReplayLogs(vpn, { select: ['replayLogName'] });
-      const { replayLogName } = replayLogs.data[0];
+class LoggedMessagesReplayBrowser extends BaseBrowser {
+  constructor({ sourceDefinition, startFrom, sempApi, solclientFactory }) {
+    super({ sourceDefinition, sempApi, solclientFactory });
+    this.startFrom = startFrom;
+  }
 
-      const prevMessages = await this.sempClient.getMsgVpnReplayLogMsgs(vpn, replayLogName, {
-        cursor: [
-          `<rpc><show><replay-log>`,
-          `<name>${replayLogName}</name>`,
-          `<vpn-name>${vpn}</vpn-name>`,
-          `<messages/><newest/>`,
-          `<msg-id>${lowestMsgId}</msg-id>`,
-          `<detail/>`,
-          `<num-elements>2</num-elements>`,
-          `</replay-log></show></rpc>`,
-        ].join(''),
-        select: ['replicationGroupMsgId'],
-        count: 2
+  async getPage(page) {
+    const { fromMsgId } = page || {};
+    const { sourceName } = this.sourceDefinition;
+    const count = this.pageSize;
+
+    const replayFrom = fromMsgId ? await this.getQueueReplayFrom({ messageId: fromMsgId }) : page;
+    const { tempQueueName, messages, cleanupReplay } = await this.replayToTempQueue({ sourceName, replayFrom });
+    const msgMetaData =
+      await this.getMessageMetaData({
+        queueName: tempQueueName,
+        fromMsgId,
+        direction: MESSAGE_ORDER.OLDEST,
+        count
       });
 
-      return { afterMsg: prevMessages.data[1].replicationGroupMsgId };
-    } catch (ex) {
-      console.warn('Unable to find a suitable RGMID to start from. Will replay from beginning.', ex);
-      return {};
+    const { data: tempQueue } = await this.sempClient.getMsgVpnQueue(this.vpn, tempQueueName);
+    cleanupReplay();
+
+    if (msgMetaData.length === 0) {
+      return [];
     }
+
+    const highestMsgId = msgMetaData[msgMetaData.length - 1]?.msgId;
+
+    this.nextPage =
+      (tempQueue.spooledMsgCount > count) ? ({ fromMsgId: highestMsgId + 1 }) : null;
+    this.prevPages.push({ fromMsgId });
+
+    return this.merge({ messages, msgMetaData });
   }
+}
+
+class QueuedMessagesReplayBrowser extends BaseBrowser {
+  constructor({ sourceDefinition, startFrom, sempApi, solclientFactory }) {
+    const messageOrderBy = startFrom?.queuePosition;
+    const isReversed = (messageOrderBy === MESSAGE_ORDER.NEWEST);
+
+    super({
+      sourceDefinition,
+      startFrom: { fromMsgId: isReversed ? MAX_MSG_ID : MIN_MSG_ID },
+      sempApi,
+      solclientFactory
+    });
+
+    this.messageOrderBy = messageOrderBy;
+    this.isReversed = isReversed;
+  }
+
+  async getPage(page) {
+    const { fromMsgId } = page || {};
+    const { sourceName } = this.sourceDefinition;
+    const count = this.pageSize;
+    const msgMetaData =
+      await this.getMessageMetaData({
+        queueName: sourceName,
+        fromMsgId,
+        direction: this.messageOrderBy,
+        count
+      });
+    if (msgMetaData.length === 0) {
+      return [];
+    }
+
+    const { data: queue } = await this.sempClient.getMsgVpnQueue(this.vpn, sourceName);
+
+    const lowestMsgId = msgMetaData[this.isReversed ? (msgMetaData.length - 1) : 0].msgId;
+    const highestMsgId = msgMetaData[this.isReversed ? 0 : (msgMetaData.length - 1)].msgId;
+
+    const replayFrom = await this.getQueueReplayFrom({ messageId: lowestMsgId });
+    const { messages, cleanupReplay } = await this.replayToTempQueue({ sourceName, replayFrom, count: msgMetaData.length });
+    cleanupReplay();
+
+    this.nextPage = this.isReversed ?
+      ((lowestMsgId > queue.lowestMsgId) ? ({ fromMsgId: lowestMsgId - 1 }) : null) :
+      ((highestMsgId < queue.highestMsgId) ? ({ fromMsgId: highestMsgId + 1 }) : null);
+    this.prevPages.push({ fromMsgId });
+
+    return this.merge({ messages, msgMetaData });
+  }
+}
+
+class BasicQueueBrowser extends BaseBrowser {
+  constructor({ sourceDefinition, sempApi, solclientFactory }) {
+    super({ sourceDefinition, sempApi, solclientFactory });
+
+    this.didReadMessages = false;
+  }
+
+  async open() {
+    const { sourceName: queueName } = this.sourceDefinition;
+
+    await super.open();
+    this.state = BROWSER_STATE.OPENING; // reset OPEN state to continue async operations
+    
+    await this.session.connect();
+    this.assertState(BROWSER_STATE.OPENING);
+
+    const queueDescriptor = { name: queueName, type: solace.QueueType.QUEUE };
+    this.queueBrowser = this.session.createQueueBrowser({ queueDescriptor });
+    await this.queueBrowser.connect();
+    this.assertState(BROWSER_STATE.OPENING);
+    this.nextPage = true;
+
+    this.state = BROWSER_STATE.OPEN;
+  }
+  async close() {
+    this.state = BROWSER_STATE.CLOSING;
+
+    this.queueBrowser?.disconnect();
+    this.session?.disconnect();
+
+    this.assertState(BROWSER_STATE.CLOSING);
+    this.state = BROWSER_STATE.CLOSED;
+  }
+
+  async getPage() {
+    const { sourceName: queueName } = this.sourceDefinition;
+    const messages = await this.queueBrowser.readMessages(this.pageSize, 500);
+
+    if (messages.length === 0) {
+      return [];
+    }
+    const fromMsgId = messages[0].getGuaranteedMessageId()?.low;
+    const msgMetaData =
+      await this.getMessageMetaData({
+        queueName,
+        fromMsgId,
+        direction: MESSAGE_ORDER.OLDEST,
+        count: messages.length
+      });
+    
+    this.didReadMessages = true;
+    return this.merge({ messages, msgMetaData });
+  }
+
+  async getFirstPage() {
+    if(this.didReadMessages) {
+      await this.close();
+      await this.open();
+      this.didReadMessages = false;
+    }
+    return await this.getPage();
+  }
+}
+
+class NullBrowser extends BaseBrowser{
+  async open() {}
+  async close() {}
+  async getPage() {return []};
 }
 
 const NULL_BROWSER = new NullBrowser();
 
-export function useQueueBrowser(sourceDefinition, startFrom) {
-  console.log('useQueueBrowser', sourceDefinition);
-  const sempApi = useSempApi();
-  const solclientFactory = solace.SolclientFactory;
-  
+export function useQueueBrowsing() {
   const [browser, setBrowser] = useState(NULL_BROWSER);
+  const sempApi = useSempApi();
 
-  const { sourceName, type, config, topics } = sourceDefinition;
+  const updateBrowser = async (sourceDefinition, browseFrom) => {
+    const solclientFactory = solace.SolclientFactory;
+    const { type } = sourceDefinition;
+    const { browseMode, startFrom = {}} = browseFrom;
 
-  useEffect(() => {
-    const newBrowser = (type === 'queue') ? (
-      startFrom?.tail ? 
-        new ReverseQueueBrowser(sourceDefinition, startFrom, sempApi, solclientFactory) :
-      startFrom?.head ?
-        new ForwardQueueBrowser(sourceDefinition, startFrom, sempApi, solclientFactory) :
-        new ReplayQueueBrowser(sourceDefinition, startFrom, sempApi, solclientFactory)
-    ) : (type === 'topic') ? (
-      new ReplayTopicBrowser(sourceDefinition, startFrom, sempApi, solclientFactory)
+    const newBrowser = (type) ? (
+      (browseMode === BROWSE_MODE.BASIC || type === SOURCE_TYPE.BASIC) ?
+        new BasicQueueBrowser({ sourceDefinition, startFrom, sempApi, solclientFactory }) :
+        (browseMode === BROWSE_MODE.HEAD || browseMode === BROWSE_MODE.TAIL) ?
+          new QueuedMessagesReplayBrowser({ sourceDefinition, startFrom, sempApi, solclientFactory }) :
+          new LoggedMessagesReplayBrowser({ sourceDefinition, startFrom, sempApi, solclientFactory })
     ) : NULL_BROWSER;
+    try {
+      await browser?.close();
+    } catch (err) {
+      console.error('Error closing browser', err);
+    }
+    try {
+      await newBrowser?.open();
+      setBrowser(newBrowser);
+    } catch (err) {
+      console.error('Error opening browser', err);
+      setBrowser(NULL_BROWSER);
+    }
+  }
 
-    setBrowser(newBrowser);
-    return () => newBrowser.close();
-  }, [sourceDefinition, startFrom]);
-
-  return browser;
-};
+  return [browser, updateBrowser];
+}
