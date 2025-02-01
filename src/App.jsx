@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import { useBrokerConfig } from './providers/BrokerConfigProvider';
+import { useQueueBrowsing } from './hooks/solace';
 
 import DesktopContainer from './components/DesktopContainer';
 import RootLayout from './components/RootLayout';
@@ -9,20 +10,25 @@ import MessageList from './components/MessageList';
 import MessagePayloadView from './components/MessagePayloadView';
 import MessageHeaderView from './components/MessageHeaderView';
 
-
 import 'primeflex/primeflex.css';
 import 'primeicons/primeicons.css';
 import './App.css';
 
 export default function App() {
+  const { brokers, brokerEditor } = useBrokerConfig();
+  
   const [selectedSource, setSelectedSource] = useState({});
   const [selectedMessage, setSelectedMessage] = useState({});
 
-  const { brokers, brokerEditor } = useBrokerConfig();
+  const [browser, updateBrowser] = useQueueBrowsing();
 
-  const handleSourceSelected = (queue) => {
-    setSelectedSource(queue);
+  const handleSourceSelected = (source) => {
     setSelectedMessage({});
+    setSelectedSource(source);
+  };
+
+  const handleBrowseFromChange = (browseFrom) => {
+    updateBrowser(selectedSource, browseFrom);
   };
 
   const handleMessageSelect = (message) => {
@@ -39,8 +45,10 @@ export default function App() {
           </RootLayout.LeftPanel>
           <RootLayout.CenterPanel>
             <MessageList 
-              sourceDefinition={selectedSource} 
-              selectedMessage={selectedMessage} 
+              sourceDefinition={selectedSource}
+              browser={browser}
+              selectedMessage={selectedMessage}
+              onBrowseFromChange={handleBrowseFromChange}
               onMessageSelect={handleMessageSelect} 
             />
           </RootLayout.CenterPanel>
