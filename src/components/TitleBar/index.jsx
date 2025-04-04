@@ -8,7 +8,7 @@ import classes from './styles.module.css';
 import { useEffect, useState } from "react";
 
 export default function TitleBar() {
-  const [colorScheme, setColorScheme] = useState('dark');
+  const [colorScheme, setColorScheme] = useState('light');
 
   const isColorSchemeDark = () => colorScheme === 'dark';
 
